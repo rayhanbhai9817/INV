@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
+import { Logo } from "@/components/layout/Logo";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { sendPasswordReset, signIn } from "@/lib/db/auth";
 import { errorMessage } from "@/lib/supabase";
@@ -61,11 +62,9 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-600 text-lg font-bold text-white">
-            FS
-          </div>
-          <h1 className="text-xl font-semibold text-slate-900">Fast Sold Inventory</h1>
+        <div className="mb-8 flex flex-col items-center text-center">
+          <Logo height={52} className="mb-5" />
+          <h1 className="text-xl font-semibold text-slate-900">Inventory Management</h1>
           <p className="mt-1 text-sm text-slate-500">Sign in to manage stock and reports.</p>
         </div>
 
@@ -111,9 +110,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-slate-400">
-          Fast Sold LLC — internal system
-        </p>
+        <p className="mt-6 text-center text-xs text-slate-400">Internal system</p>
       </div>
     </main>
   );

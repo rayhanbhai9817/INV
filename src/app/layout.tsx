@@ -6,6 +6,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 export const metadata: Metadata = {
   title: "Fast Sold Inventory",
   description: "Inventory management system for Fast Sold LLC",
+  icons: { icon: "/icon.svg" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { NAV_GROUPS, NAV_ITEMS } from "@/components/layout/navigation";
 import { NavIcon } from "@/components/layout/NavIcon";
+import { Logo } from "@/components/layout/Logo";
 import { useSettings } from "@/components/providers/SettingsProvider";
 
 export interface SidebarProps {
@@ -35,11 +36,9 @@ export function Sidebar({ open, onClose, unreadCount }: SidebarProps) {
         )}
       >
         <div className="flex h-16 items-center gap-3 border-b border-slate-100 px-5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
-            FS
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900">{settings.company_name}</p>
+          <Logo height={30} />
+          <div className="min-w-0 border-l border-slate-200 pl-3">
+            <p className="truncate text-xs font-semibold text-slate-900">{settings.company_name}</p>
             <p className="text-[11px] uppercase tracking-wide text-slate-400">Inventory</p>
           </div>
         </div>
@@ -88,7 +87,7 @@ export function Sidebar({ open, onClose, unreadCount }: SidebarProps) {
         </nav>
 
         <div className="border-t border-slate-100 px-5 py-3 text-[11px] text-slate-400">
-          Fast Sold LLC © {new Date().getFullYear()}
+          Ozipco © {new Date().getFullYear()}
         </div>
       </aside>
     </>

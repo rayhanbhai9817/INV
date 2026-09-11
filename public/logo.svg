@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 96" width="260" height="96" role="img" aria-label="Ozipco">
+  <title>Ozipco</title>
+  <rect x="5" y="5" width="250" height="86" rx="43" ry="43" fill="none" stroke="#be1e2d" stroke-width="10"/>
+  <text x="130" y="50" text-anchor="middle" dominant-baseline="central" fill="#be1e2d"
+        font-size="54" font-weight="700" letter-spacing="-1"
+        font-family="'Segoe UI','Helvetica Neue',Arial,system-ui,sans-serif">ozipco</text>
+</svg>
