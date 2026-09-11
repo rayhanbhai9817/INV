@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+/* Hide the native clear button so search inputs keep one consistent look. */
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
