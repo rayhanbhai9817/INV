@@ -80,7 +80,10 @@ export interface LedgerEntryWithProduct extends LedgerEntry {
 
 export interface ProductPrice {
   id: string;
-  product_id: string;
+  /** Null when the entry names its product by hand. */
+  product_id: string | null;
+  /** Set instead of product_id for a manually typed product name. */
+  product_name: string | null;
   unit_price: number;
   unit: number;
   /** Generated column: unit_price * unit. Never written from the client. */

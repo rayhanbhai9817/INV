@@ -11,6 +11,7 @@ import {
   createPrice,
   deletePrice,
   listPrices,
+  MANUAL_FILTER,
   updatePrice,
   type PriceInput,
 } from "@/lib/db/prices";
@@ -20,8 +21,13 @@ import type { Product, ProductPriceWithProduct } from "@/types";
 
 const PAGE_SIZE = 20;
 
+/** A price entry names a catalogue product, or carries a typed name. */
+type NameMode = "catalogue" | "manual";
+
 interface FormState {
+  mode: NameMode;
   product_id: string;
+  product_name: string;
   unit_price: string;
   unit: string;
   date: string;
@@ -29,12 +35,24 @@ interface FormState {
 }
 
 const blank: FormState = {
+  mode: "catalogue",
   product_id: "",
+  product_name: "",
   unit_price: "",
   unit: "",
   date: todayISO(),
   note: "",
 };
+
+/** The product a row names, from the catalogue join or the typed name. */
+function displayName(row: ProductPriceWithProduct): string {
+  return row.product?.name ?? row.product_name ?? "Deleted product";
+}
+
+function displaySku(row: ProductPriceWithProduct): string {
+  if (row.product?.sku) return row.product.sku;
+  return row.product_id ? "NO SKU" : "Manual entry";
+}
 
 export default function ProductPricePage() {
   const toast = useToast();
@@ -78,7 +96,7 @@ export default function ProductPricePage() {
       entries: total,
       value,
       average: units > 0 ? value / units : 0,
-      products: new Set(rows.map((row) => row.product_id)).size,
+      products: new Set(rows.map((row) => row.product_id ?? `manual:${row.product_name}`)).size,
     };
   }, [rows, total]);
 
@@ -98,7 +116,9 @@ export default function ProductPricePage() {
   function openEdit(row: ProductPriceWithProduct) {
     setEditing(row);
     setForm({
-      product_id: row.product_id,
+      mode: row.product_id ? "catalogue" : "manual",
+      product_id: row.product_id ?? "",
+      product_name: row.product_name ?? "",
       unit_price: String(row.unit_price),
       unit: String(row.unit),
       date: row.date,
@@ -108,8 +128,14 @@ export default function ProductPricePage() {
   }
 
   async function save() {
-    if (!form.product_id) {
+    const manualName = form.product_name.trim();
+
+    if (form.mode === "catalogue" && !form.product_id) {
       toast.error("Select a product");
+      return;
+    }
+    if (form.mode === "manual" && !manualName) {
+      toast.error("Enter a product name");
       return;
     }
     if (!Number.isFinite(price) || price < 0) {
@@ -128,7 +154,8 @@ export default function ProductPricePage() {
     setSaving(true);
     try {
       const payload: PriceInput = {
-        product_id: form.product_id,
+        product_id: form.mode === "catalogue" ? form.product_id : null,
+        product_name: form.mode === "manual" ? manualName.slice(0, 160) : null,
         unit_price: price,
         unit: quantity,
         date: form.date,
@@ -174,7 +201,7 @@ export default function ProductPricePage() {
         ["Date", "Product", "SKU", "Unit Price", "Unit", "Total Price", "Note"],
         rows.map((row) => [
           row.date,
-          row.product?.name ?? "",
+          displayName(row),
           row.product?.sku ?? "",
           row.unit_price,
           row.unit,
@@ -257,6 +284,7 @@ export default function ProductPricePage() {
             className={cn(fieldClass, "w-[220px]")}
           >
             <option value="all">All Products</option>
+            <option value={MANUAL_FILTER}>Manual entries</option>
             {(products.data ?? []).map((product: Product) => (
               <option key={product.id} value={product.id}>
                 {product.name}
@@ -334,10 +362,15 @@ export default function ProductPricePage() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="mb-1 max-w-[220px] truncate text-sm font-bold leading-none text-[#2b3674]">
-                        {row.product?.name ?? "Deleted product"}
+                        {displayName(row)}
                       </div>
-                      <div className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
-                        {row.product?.sku ?? "NO SKU"}
+                      <div
+                        className={cn(
+                          "text-[9px] font-black uppercase tracking-[0.2em]",
+                          row.product_id ? "text-[#a3aed0]" : "text-[#4318ff]",
+                        )}
+                      >
+                        {displaySku(row)}
                       </div>
                     </td>
                     <td className="px-4 py-4 text-right text-sm font-black text-[#a3aed0]">
@@ -406,19 +439,60 @@ export default function ProductPricePage() {
 
           <div className="grid gap-6 py-6 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-2 sm:col-span-2 lg:col-span-3">
-              <label className={dialogLabelClass}>Product</label>
-              <select
-                value={form.product_id}
-                onChange={(event) => setForm({ ...form, product_id: event.target.value })}
-                className={dialogFieldClass}
-              >
-                <option value="">Select a product</option>
-                {(products.data ?? []).map((product: Product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.name} · {product.sku ?? "NO SKU"}
-                  </option>
-                ))}
-              </select>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <label className={dialogLabelClass}>Product</label>
+                <div className="flex gap-1 rounded-xl bg-[#f4f7fe] p-1">
+                  {(
+                    [
+                      ["catalogue", "From catalogue"],
+                      ["manual", "Manual name"],
+                    ] as Array<[NameMode, string]>
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setForm({ ...form, mode: value })}
+                      className={cn(
+                        "rounded-lg px-4 py-1.5 text-[9px] font-black uppercase tracking-[0.15em] transition-all",
+                        form.mode === value
+                          ? "bg-white text-[#2b3674] shadow-sm"
+                          : "text-[#a3aed0] hover:text-[#2b3674]",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {form.mode === "catalogue" ? (
+                <select
+                  value={form.product_id}
+                  onChange={(event) => setForm({ ...form, product_id: event.target.value })}
+                  className={dialogFieldClass}
+                >
+                  <option value="">Select a product</option>
+                  {(products.data ?? []).map((product: Product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.name} · {product.sku ?? "NO SKU"}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <>
+                  <input
+                    value={form.product_name}
+                    onChange={(event) => setForm({ ...form, product_name: event.target.value })}
+                    maxLength={160}
+                    placeholder="Type a product name"
+                    className={dialogFieldClass}
+                  />
+                  <p className="ml-1 text-[10px] font-bold text-[#a3aed0]">
+                    Priced by name only. Nothing is added to the catalogue and no stock is
+                    affected.
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -508,7 +582,7 @@ export default function ProductPricePage() {
               {formatMoney(removing.total_price, settings.currency)}
             </span>{" "}
             entry for{" "}
-            <span className="font-bold text-[#2b3674]">{removing.product?.name ?? "—"}</span>?
+            <span className="font-bold text-[#2b3674]">{displayName(removing)}</span>?
             Stock and ledger data are unaffected.
           </p>
           <div className="flex justify-end gap-3">

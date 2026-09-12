@@ -82,14 +82,16 @@ CREATE TABLE IF NOT EXISTS ledger (
 -- 7. product_prices  (independent module — no link to stock flow)
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS product_prices (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_id  uuid REFERENCES products(id),
-  unit_price  numeric(12,2) NOT NULL,
-  unit        integer NOT NULL,
-  total_price numeric(12,2) GENERATED ALWAYS AS (unit_price * unit) STORED,
-  date        date DEFAULT CURRENT_DATE,
-  note        text,
-  created_at  timestamptz DEFAULT now()
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id   uuid REFERENCES products(id),
+  -- Set instead of product_id when the entry names a product by hand.
+  product_name text,
+  unit_price   numeric(12,2) NOT NULL,
+  unit         integer NOT NULL,
+  total_price  numeric(12,2) GENERATED ALWAYS AS (unit_price * unit) STORED,
+  date         date DEFAULT CURRENT_DATE,
+  note         text,
+  created_at   timestamptz DEFAULT now()
 );
 
 -- ---------------------------------------------------------------------
@@ -140,6 +142,7 @@ CREATE INDEX IF NOT EXISTS idx_ledger_batch           ON ledger(batch_id);
 CREATE INDEX IF NOT EXISTS idx_stock_out_product      ON stock_out(product_id);
 CREATE INDEX IF NOT EXISTS idx_stock_out_date         ON stock_out(out_date DESC);
 CREATE INDEX IF NOT EXISTS idx_prices_product         ON product_prices(product_id);
+CREATE INDEX IF NOT EXISTS idx_prices_manual          ON product_prices(product_name) WHERE product_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_notifications_unread   ON notifications(is_read, created_at DESC);
 
 -- =====================================================================
@@ -162,6 +165,12 @@ ALTER TABLE ledger ADD CONSTRAINT ledger_qty_positive CHECK (qty > 0);
 
 ALTER TABLE product_prices DROP CONSTRAINT IF EXISTS product_prices_sane;
 ALTER TABLE product_prices ADD CONSTRAINT product_prices_sane CHECK (unit_price >= 0 AND unit > 0);
+
+-- Every price entry names a catalogue product or carries a typed name.
+ALTER TABLE product_prices DROP CONSTRAINT IF EXISTS product_prices_identifies_product;
+ALTER TABLE product_prices ADD CONSTRAINT product_prices_identifies_product CHECK (
+  product_id IS NOT NULL OR (product_name IS NOT NULL AND length(btrim(product_name)) > 0)
+);
 
 -- The ledger is an append-only audit log: no updates, no deletes.
 CREATE OR REPLACE FUNCTION ledger_is_immutable() RETURNS trigger
