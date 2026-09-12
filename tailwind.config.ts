@@ -31,6 +31,23 @@ const config: Config = {
           accent: "#1e293b",
         },
 
+        /**
+         * The shared UI kit (Button, Input, Badge, …) was written against a
+         * `brand` scale. Without it those classes compile to nothing, which
+         * left every primary button white-on-white and every focus ring dead.
+         * The shades map onto the palette this project already uses: 600 is
+         * the primary and 700 its hover, exactly as the redesigned pages
+         * spell them literally.
+         */
+        brand: {
+          50: "#f2efff",
+          100: "#e0d9ff",
+          200: "#c4b5ff",
+          500: "#5a35ff",
+          600: "#4318ff",
+          700: "#3311cc",
+        },
+
         /** Aliases kept so existing markup keeps compiling. */
         canvas: "#f4f7fe",
         navy: {
