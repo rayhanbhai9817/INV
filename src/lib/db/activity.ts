@@ -3,86 +3,120 @@
 /**
  * Daily Activity — a read-only feed over the existing ledger.
  *
- * No new tables: every row here is a ledger entry, joined to its product and
- * its batch so the feed can show what moved, how much, and from which batch.
+ * No new tables: every row is a ledger entry joined to its product and batch.
+ * Running inventory is accumulated forward from the first entry, which
+ * reconciles with the current stock because every movement writes a ledger row.
  */
 
 import { supabase } from "@/lib/supabase";
-import { assertOk, paginated, rangeFor, type PageParams } from "@/lib/db/helpers";
-import { escapeLike, todayISO } from "@/lib/utils";
+import { assertOk, paginated, type PageParams } from "@/lib/db/helpers";
+import { rangeFor } from "@/lib/range";
 import type { LedgerType, Paginated } from "@/types";
-
-export type ActivityWindow = "today" | "yesterday" | "week" | "month" | "all";
 
 export interface ActivityFilters extends PageParams {
   search?: string;
-  type?: LedgerType | "";
-  window?: ActivityWindow;
+  type?: LedgerType | "all";
+  preset?: string;
+  from?: string;
+  to?: string;
 }
 
 export interface ActivityRow {
   id: string;
   created_at: string;
   type: LedgerType;
-  qty: number;
+  /** Units moved, signed: positive for IN, negative for OUT. */
+  unitsAffected: number;
+  actionLabel: string;
   reference: string | null;
-  batch_id: string | null;
-  product: { id: string; name: string; sku: string | null; unit: string } | null;
-  batch: { batch_date: string } | null;
+  productName: string;
+  productSku: string | null;
+  /** Boxes and units per box, present on a Stock IN. */
+  boxes: number;
+  unitsPerBox: number;
+  prevInventory: number;
+  newInventory: number;
 }
 
 const ACTIVITY_SELECT =
-  "id,created_at,type,qty,reference,batch_id, product:products(id,name,sku,unit), batch:stock_batches(batch_date)";
+  "id,product_id,type,qty,created_at,reference,batch_id," +
+  "product:products(name,sku),batch:stock_batches(box_count,qty_per_box)";
 
-/** Inclusive [from, to] day range for the chosen window. */
-export function windowRange(window: ActivityWindow): { from: string; to: string } | null {
-  if (window === "all") return null;
+interface RawLedgerRow {
+  id: string;
+  product_id: string;
+  type: LedgerType;
+  qty: number;
+  created_at: string;
+  reference: string | null;
+  batch_id: string | null;
+  product: { name: string; sku: string | null } | null;
+  batch: { box_count: number; qty_per_box: number } | null;
+}
 
-  const today = todayISO();
-  const date = new Date(`${today}T00:00:00`);
-  const iso = (value: Date) => value.toISOString().slice(0, 10);
+/** Builds the whole feed, oldest first, carrying each product's balance. */
+async function buildFeed(): Promise<ActivityRow[]> {
+  const { data, error } = await supabase
+    .from("ledger")
+    .select(ACTIVITY_SELECT)
+    .order("created_at", { ascending: true });
+  assertOk(error);
 
-  if (window === "yesterday") {
-    const previous = new Date(date);
-    previous.setDate(previous.getDate() - 1);
-    return { from: iso(previous), to: iso(previous) };
-  }
-  if (window === "week") {
-    const start = new Date(date);
-    start.setDate(start.getDate() - 6);
-    return { from: iso(start), to: today };
-  }
-  if (window === "month") {
-    const start = new Date(date.getFullYear(), date.getMonth(), 1);
-    return { from: iso(start), to: today };
-  }
-  return { from: today, to: today };
+  const balances = new Map<string, number>();
+
+  return ((data ?? []) as unknown as RawLedgerRow[]).map((entry) => {
+    const signed = entry.type === "IN" ? Number(entry.qty) : -Math.abs(Number(entry.qty));
+    const prev = balances.get(entry.product_id) ?? 0;
+    const next = prev + signed;
+    balances.set(entry.product_id, next);
+
+    return {
+      id: entry.id,
+      created_at: entry.created_at,
+      type: entry.type,
+      unitsAffected: signed,
+      actionLabel: entry.type === "IN" ? "Stock Received" : "Stock Issued",
+      reference: entry.reference,
+      productName: entry.product?.name ?? "Deleted product",
+      productSku: entry.product?.sku ?? null,
+      boxes: entry.type === "IN" ? Number(entry.batch?.box_count ?? 0) : 0,
+      unitsPerBox: Number(entry.batch?.qty_per_box ?? 0),
+      prevInventory: prev,
+      newInventory: next,
+    };
+  });
 }
 
 export async function listActivity(
   filters: ActivityFilters = {},
 ): Promise<Paginated<ActivityRow>> {
-  let query = supabase.from("ledger").select(ACTIVITY_SELECT, { count: "exact" });
+  const feed = await buildFeed();
+  const range = rangeFor(filters.preset ?? "today", filters.from, filters.to);
+  const fromTime = new Date(range.from).getTime();
+  const toTime = new Date(range.to).getTime();
+  const term = filters.search?.trim().toLowerCase() ?? "";
 
-  if (filters.type) query = query.eq("type", filters.type);
+  const matched = feed
+    .filter((row) => {
+      const at = new Date(row.created_at).getTime();
+      if (at < fromTime || at > toTime) return false;
+      if (filters.type && filters.type !== "all" && row.type !== filters.type) return false;
+      if (!term) return true;
+      return (
+        row.productName.toLowerCase().includes(term) ||
+        (row.productSku ?? "").toLowerCase().includes(term) ||
+        row.actionLabel.toLowerCase().includes(term) ||
+        (row.reference ?? "").toLowerCase().includes(term)
+      );
+    })
+    .reverse();
 
-  const range = windowRange(filters.window ?? "today");
-  if (range) {
-    query = query
-      .gte("created_at", `${range.from}T00:00:00`)
-      .lte("created_at", `${range.to}T23:59:59.999`);
-  }
+  const page = Math.max(1, filters.page ?? 1);
+  const pageSize = filters.pageSize ?? 25;
+  const start = (page - 1) * pageSize;
 
-  if (filters.search?.trim()) {
-    const term = escapeLike(filters.search.trim());
-    query = query.or(`reference.ilike.%${term}%`);
-  }
-
-  const [from, to] = rangeFor(filters);
-  const { data, count, error } = await query
-    .order("created_at", { ascending: false })
-    .range(from, to);
-  assertOk(error);
-
-  return paginated<ActivityRow>(data as unknown as ActivityRow[], count, filters);
+  return paginated<ActivityRow>(matched.slice(start, start + pageSize), matched.length, {
+    page,
+    pageSize,
+  });
 }

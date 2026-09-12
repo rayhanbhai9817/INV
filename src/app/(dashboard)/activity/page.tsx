@@ -1,228 +1,320 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, Inbox, Search } from "lucide-react";
-import { Panel } from "@/components/ui/StatTile";
-import { ErrorState, TableSkeleton } from "@/components/ui/States";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Inbox,
+  Loader2,
+  Search,
+  User,
+} from "lucide-react";
+
 import { useAsync, useDebounced } from "@/lib/hooks";
-import { listActivity, type ActivityWindow } from "@/lib/db/activity";
-import { DEFAULT_PAGE_SIZE } from "@/lib/db/helpers";
+import { listActivity, type ActivityRow } from "@/lib/db/activity";
+import { rangeFor } from "@/lib/range";
 import { cn, formatNumber } from "@/lib/utils";
 import type { LedgerType } from "@/types";
 
-const WINDOWS: Array<{ value: ActivityWindow; label: string }> = [
+const PAGE_SIZE = 25;
+
+const TYPE_OPTIONS: Array<{ value: LedgerType | "all"; label: string }> = [
+  { value: "all", label: "All Activities" },
+  { value: "IN", label: "Stock IN" },
+  { value: "OUT", label: "Stock OUT" },
+];
+
+const PRESET_OPTIONS = [
   { value: "today", label: "Today" },
   { value: "yesterday", label: "Yesterday" },
-  { value: "week", label: "Last 7 days" },
-  { value: "month", label: "This month" },
-  { value: "all", label: "All time" },
+  { value: "last-7-days", label: "Last 7 Days" },
+  { value: "month", label: "This Month" },
+  { value: "all", label: "All Time" },
+  { value: "custom", label: "Custom Range" },
 ];
-
-const ACTIVITIES: Array<{ value: LedgerType | ""; label: string }> = [
-  { value: "", label: "All Activities" },
-  { value: "IN", label: "Stock In" },
-  { value: "OUT", label: "Stock Out" },
-];
-
-function longDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`)
-    .toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
-    .toUpperCase();
-}
 
 function clockTime(value: string): string {
-  return new Date(value).toLocaleTimeString(undefined, {
+  return new Date(value).toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
+    hour12: true,
   });
 }
 
+function dayStamp(value: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
 export default function DailyActivityPage() {
+  const [preset, setPreset] = useState("today");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [typeFilter, setTypeFilter] = useState<LedgerType | "all">("all");
   const [search, setSearch] = useState("");
-  const [type, setType] = useState<LedgerType | "">("");
-  const [window, setWindow] = useState<ActivityWindow>("today");
   const [page, setPage] = useState(1);
 
   const debouncedSearch = useDebounced(search, 300);
+  const range = rangeFor(preset, from, to);
 
   const activity = useAsync(
     () =>
       listActivity({
         search: debouncedSearch,
-        type,
-        window,
+        type: typeFilter,
+        preset,
+        from,
+        to,
         page,
-        pageSize: DEFAULT_PAGE_SIZE,
+        pageSize: PAGE_SIZE,
       }),
-    [debouncedSearch, type, window, page],
+    [debouncedSearch, typeFilter, preset, from, to, page],
   );
 
   const rows = activity.data?.rows ?? [];
   const total = activity.data?.count ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / DEFAULT_PAGE_SIZE));
-  const heading = WINDOWS.find((item) => item.value === window)?.label ?? "Today";
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="space-y-5">
-      {/* ------------------------------ Header ----------------------------- */}
-      <Panel className="py-7">
-        <h2 className="font-serif text-[30px] font-bold leading-tight tracking-tight text-navy-800">
-          {window === "today" ? "Today Activity" : `${heading} Activity`}
-        </h2>
-        <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-          {longDate(new Date().toISOString().slice(0, 10))}
-        </p>
-      </Panel>
+    <div className="space-y-6">
+      <div className="flex flex-col justify-between gap-6 rounded-[20px] border border-[#f4f7fe] bg-white p-6 shadow-sm md:flex-row md:items-center">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-[#2b3674]">
+            {range.label} Activity
+          </h1>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#4318ff]">
+            {range.details}
+          </p>
+        </div>
+      </div>
 
-      {/* ------------------------------- Feed ------------------------------ */}
-      <Panel className="p-0">
-        <div className="flex flex-wrap items-center gap-3 p-4">
-          <div className="relative min-w-[220px] flex-1">
-            <Search
-              size={15}
-              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-navy-300"
-            />
+      <div className="overflow-hidden rounded-[20px] bg-white shadow-sm ring-1 ring-black/5">
+        <div className="flex flex-wrap items-center gap-4 border-b border-[#f4f7fe] bg-white p-6">
+          <div className="relative min-w-[200px] flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a3aed0]" />
             <input
-              type="search"
               value={search}
               onChange={(event) => {
                 setSearch(event.target.value);
                 setPage(1);
               }}
-              placeholder="Search by Product, SKU, Action…"
-              className="w-full rounded-xl bg-canvas py-3 pl-10 pr-3 text-sm text-navy-800 outline-none transition placeholder:text-navy-300 focus:ring-2 focus:ring-primary/20"
+              placeholder="Search by Product, SKU, Action..."
+              className="h-10 w-full rounded-xl border-none bg-[#f4f7fe] pl-10 pr-3 text-xs text-[#2b3674] outline-none placeholder:text-[#a3aed0] focus:ring-2 focus:ring-[#4318ff]/20"
             />
           </div>
 
-          <SelectPill
-            value={type}
-            onChange={(value) => {
-              setType(value as LedgerType | "");
+          <select
+            value={typeFilter}
+            onChange={(event) => {
+              setTypeFilter(event.target.value as LedgerType | "all");
               setPage(1);
             }}
-            options={ACTIVITIES}
-          />
-          <SelectPill
-            value={window}
-            onChange={(value) => {
-              setWindow(value as ActivityWindow);
+            className="h-10 w-[180px] rounded-xl border-none bg-[#f4f7fe] px-3 text-xs text-[#2b3674] outline-none focus:ring-2 focus:ring-[#4318ff]/20"
+          >
+            {TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={preset}
+            onChange={(event) => {
+              setPreset(event.target.value);
               setPage(1);
             }}
-            options={WINDOWS}
-          />
+            className="h-10 w-[180px] rounded-xl border-none bg-[#f4f7fe] px-3 text-xs text-[#2b3674] outline-none focus:ring-2 focus:ring-[#4318ff]/20"
+          >
+            {PRESET_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          {preset === "custom" && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={from}
+                onChange={(event) => setFrom(event.target.value)}
+                className="h-10 rounded-xl border-none bg-[#f4f7fe] px-3 text-xs text-[#2b3674] outline-none"
+              />
+              <input
+                type="date"
+                value={to}
+                onChange={(event) => setTo(event.target.value)}
+                className="h-10 rounded-xl border-none bg-[#f4f7fe] px-3 text-xs text-[#2b3674] outline-none"
+              />
+            </div>
+          )}
         </div>
 
         {activity.loading ? (
-          <TableSkeleton rows={5} cols={5} />
+          <div className="flex items-center justify-center gap-2 py-12 text-sm text-[#a3aed0]">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          </div>
         ) : activity.error ? (
-          <ErrorState message={activity.error} onRetry={activity.reload} />
+          <div className="flex flex-col items-center justify-center gap-3 py-12 text-sm text-[#ee5d50]">
+            <span>{activity.error}</span>
+            <button
+              type="button"
+              onClick={activity.reload}
+              className="rounded-xl border border-[#f4f7fe] px-4 py-2 text-xs font-bold text-[#2b3674] transition hover:bg-[#f4f7fe]"
+            >
+              Try again
+            </button>
+          </div>
         ) : rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
-            <Inbox size={26} className="text-navy-200" strokeWidth={1.5} />
-            <p className="mt-3 text-sm text-navy-300">No activity recorded for this period</p>
+          <div className="flex flex-col items-center justify-center gap-2 py-12 text-sm text-[#a3aed0]">
+            <Inbox className="h-6 w-6" />
+            No activity recorded for this period
           </div>
         ) : (
-          <ul className="divide-y divide-navy-200/40">
-            {rows.map((row) => (
-              <li key={row.id} className="flex flex-wrap items-center gap-4 px-5 py-4">
-                <span
-                  className={cn(
-                    "w-[74px] shrink-0 rounded-full px-2.5 py-1 text-center text-[10px] font-bold uppercase tracking-[0.1em]",
-                    row.type === "IN"
-                      ? "bg-success/10 text-success"
-                      : "bg-danger/10 text-danger",
-                  )}
-                >
-                  {row.type === "IN" ? "Stock In" : "Stock Out"}
-                </span>
-
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-serif text-sm font-bold text-navy-800">
-                    {row.product?.name ?? "Deleted product"}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-navy-300">
-                    {row.product?.sku ? `SKU ${row.product.sku}` : "No SKU"}
-                    {row.batch?.batch_date && ` · Batch ${row.batch.batch_date}`}
-                    {row.reference && ` · ${row.reference}`}
-                  </p>
-                </div>
-
-                <p
-                  className={cn(
-                    "shrink-0 font-serif text-sm font-bold tabular-nums",
-                    row.type === "IN" ? "text-success" : "text-danger",
-                  )}
-                >
-                  {row.type === "IN" ? "+" : "−"}
-                  {formatNumber(row.qty)}{" "}
-                  <span className="text-[11px] font-semibold text-navy-300">
-                    {row.product?.unit ?? "units"}
-                  </span>
-                </p>
-
-                <p className="w-16 shrink-0 text-right text-[11px] text-navy-300">
-                  {clockTime(row.created_at)}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-[#f4f7fe]">
+                  <th className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+                    Timestamp
+                  </th>
+                  <th className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+                    Action
+                  </th>
+                  <th className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+                    Product
+                  </th>
+                  <th className="px-4 py-5 text-right text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+                    Qty Change
+                  </th>
+                  <th className="px-4 py-5 text-right text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+                    Inventory
+                  </th>
+                  <th className="px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+                    Performed By
+                  </th>
+                  <th className="px-4 py-5 text-right text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <ActivityTableRow key={row.id} row={row} />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-navy-200/40 px-5 py-3.5">
-          <p className="text-[11px] text-navy-300">
-            {formatNumber(total)} records · page {page} of {totalPages}
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#f4f7fe] px-4 py-3 text-sm">
+          <span className="text-[#a3aed0]">
+            {formatNumber(total)} record{total === 1 ? "" : "s"} · page {page} of {pages}
+          </span>
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setPage((value) => Math.max(1, value - 1))}
               disabled={page <= 1}
-              className="rounded-xl bg-canvas px-4 py-2 text-[11px] font-semibold text-navy-500 transition hover:text-navy-800 disabled:opacity-40"
+              onClick={() => setPage(page - 1)}
+              className="rounded-lg border border-[#e0e5f2] px-3 py-1.5 text-xs font-bold text-[#2b3674] transition hover:bg-[#f4f7fe] disabled:opacity-50"
             >
               Previous
             </button>
             <button
               type="button"
-              onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
-              disabled={page >= totalPages}
-              className="rounded-xl bg-canvas px-4 py-2 text-[11px] font-semibold text-navy-500 transition hover:text-navy-800 disabled:opacity-40"
+              disabled={page >= pages}
+              onClick={() => setPage(page + 1)}
+              className="rounded-lg border border-[#e0e5f2] px-3 py-1.5 text-xs font-bold text-[#2b3674] transition hover:bg-[#f4f7fe] disabled:opacity-50"
             >
               Next
             </button>
           </div>
         </div>
-      </Panel>
+      </div>
     </div>
   );
 }
 
-/** Pill-shaped native select used by the filter row. */
-function SelectPill({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
-}) {
+function ActivityTableRow({ row }: { row: ActivityRow }) {
+  const isIn = row.type === "IN";
+
   return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="appearance-none rounded-xl bg-canvas py-3 pl-4 pr-10 text-xs font-medium text-navy-700 outline-none transition focus:ring-2 focus:ring-primary/20"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown
-        size={14}
-        className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-navy-300"
-      />
-    </div>
+    <tr className="border-b border-[#f4f7fe] transition-colors hover:bg-[#f4f7fe]/30">
+      <td className="px-4 py-4">
+        <div className="text-[10px] font-bold text-[#2b3674]">{clockTime(row.created_at)}</div>
+        <div className="text-[9px] font-medium text-[#a3aed0]">{dayStamp(row.created_at)}</div>
+      </td>
+
+      <td className="px-4 py-4">
+        <div className="flex items-center gap-2">
+          {isIn ? (
+            <ArrowUpRight className="h-4 w-4 text-[#05cd99]" />
+          ) : (
+            <ArrowDownRight className="h-4 w-4 text-[#ee5d50]" />
+          )}
+          <span className="text-xs font-bold text-[#2b3674]">{row.actionLabel}</span>
+        </div>
+        <div className="mt-1">
+          <span
+            className={cn(
+              "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold",
+              isIn ? "bg-[#05cd99]/10 text-[#05cd99]" : "bg-[#ee5d50]/10 text-[#ee5d50]",
+            )}
+          >
+            {isIn ? "STOCK IN" : "STOCK OUT"}
+          </span>
+        </div>
+      </td>
+
+      <td className="px-4 py-4">
+        <div className="text-xs font-bold text-[#2b3674]">{row.productName}</div>
+        <div className="text-[9px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+          {row.productSku ?? "NO SKU"}
+        </div>
+      </td>
+
+      <td className="px-4 py-4 text-right">
+        {row.unitsAffected !== 0 ? (
+          <div
+            className={cn("text-xs font-black", isIn ? "text-[#05cd99]" : "text-[#ee5d50]")}
+          >
+            {row.unitsAffected > 0 ? "+" : ""}
+            {formatNumber(row.unitsAffected)} units
+          </div>
+        ) : (
+          <span className="text-xs text-[#a3aed0]">N/A</span>
+        )}
+        {isIn && row.boxes !== 0 && (
+          <div className="text-[9px] font-bold text-[#a3aed0]">
+            {formatNumber(row.boxes)} boxes × {row.unitsPerBox}
+          </div>
+        )}
+      </td>
+
+      <td className="px-4 py-4 text-right">
+        <div className="text-xs font-bold text-[#2b3674]">{formatNumber(row.newInventory)}</div>
+        <div className="text-[9px] font-medium text-[#a3aed0]">
+          Prev: {formatNumber(row.prevInventory)}
+        </div>
+      </td>
+
+      <td className="px-4 py-4">
+        <div className="flex items-center gap-2">
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f4f7fe]">
+            <User className="h-3 w-3 text-[#2b3674]" />
+          </div>
+          <div>
+            <div className="text-[10px] font-bold text-[#2b3674]">System</div>
+            <div className="text-[9px] text-[#a3aed0]">{row.reference ?? "—"}</div>
+          </div>
+        </div>
+      </td>
+
+      <td className="px-4 py-4 text-right" />
+    </tr>
   );
 }
