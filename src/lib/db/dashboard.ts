@@ -136,3 +136,126 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     stockOutOrdersToday: (stockOutRes.data ?? []).length,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Raw feed for the analytics dashboard
+// ---------------------------------------------------------------------------
+
+/** Everything the dashboard aggregates, fetched once and reduced client-side. */
+export interface DashboardFeed {
+  products: DashboardProduct[];
+  movements: DashboardMovement[];
+  batches: DashboardBatch[];
+  categories: Array<{ id: string; name: string }>;
+}
+
+export interface DashboardProduct {
+  id: string;
+  name: string;
+  sku: string | null;
+  unit: string;
+  category_id: string | null;
+  categoryName: string;
+  totalUnits: number;
+  threshold: number;
+  boxes: number;
+}
+
+export interface DashboardMovement {
+  id: string;
+  product_id: string;
+  type: "IN" | "OUT";
+  qty: number;
+  created_at: string;
+  boxes: number;
+}
+
+export interface DashboardBatch {
+  batch_date: string;
+  remaining_qty: number;
+  box_count: number;
+  qty_per_box: number;
+  product_id: string;
+}
+
+export async function getDashboardFeed(): Promise<DashboardFeed> {
+  const [inventoryRes, ledgerRes, batchesRes, categoriesRes] = await Promise.all([
+    supabase.from("inventory").select("*"),
+    supabase.from("ledger").select("id,product_id,type,qty,created_at,batch_id"),
+    supabase
+      .from("stock_batches")
+      .select("id,product_id,batch_date,remaining_qty,box_count,qty_per_box"),
+    supabase.from("categories").select("id,name"),
+  ]);
+
+  assertOk(inventoryRes.error);
+  assertOk(ledgerRes.error);
+  assertOk(batchesRes.error);
+  assertOk(categoriesRes.error);
+
+  const categories = (categoriesRes.data ?? []) as Array<{ id: string; name: string }>;
+  const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
+  const batches = (batchesRes.data ?? []) as Array<DashboardBatch & { id: string }>;
+
+  // Whole cartons still on hand, per product.
+  const boxesByProduct = new Map<string, number>();
+  for (const batch of batches) {
+    const perBox = Number(batch.qty_per_box ?? 0);
+    if (perBox <= 0) continue;
+    const boxes = Math.floor(Number(batch.remaining_qty ?? 0) / perBox);
+    boxesByProduct.set(batch.product_id, (boxesByProduct.get(batch.product_id) ?? 0) + boxes);
+  }
+
+  // A Stock IN ledger row carries its batch, so its box count comes from there.
+  const batchById = new Map(batches.map((batch) => [batch.id, batch]));
+
+  const products: DashboardProduct[] = ((inventoryRes.data ?? []) as InventoryRow[]).map(
+    (row) => ({
+      id: row.id,
+      name: row.name,
+      sku: row.sku,
+      unit: row.unit,
+      category_id: row.category_id,
+      categoryName: row.category_id
+        ? (categoryNames.get(row.category_id) ?? "Uncategorized")
+        : "Uncategorized",
+      totalUnits: Number(row.current_stock ?? 0),
+      threshold: Number(row.min_stock ?? 0),
+      boxes: boxesByProduct.get(row.id) ?? 0,
+    }),
+  );
+
+  const movements: DashboardMovement[] = (
+    (ledgerRes.data ?? []) as Array<{
+      id: string;
+      product_id: string;
+      type: "IN" | "OUT";
+      qty: number;
+      created_at: string;
+      batch_id: string | null;
+    }>
+  ).map((entry) => ({
+    id: entry.id,
+    product_id: entry.product_id,
+    type: entry.type,
+    qty: Number(entry.qty ?? 0),
+    created_at: entry.created_at,
+    boxes:
+      entry.type === "IN" && entry.batch_id
+        ? Number(batchById.get(entry.batch_id)?.box_count ?? 0)
+        : 0,
+  }));
+
+  return {
+    products,
+    movements,
+    batches: batches.map(({ batch_date, remaining_qty, box_count, qty_per_box, product_id }) => ({
+      batch_date,
+      remaining_qty: Number(remaining_qty ?? 0),
+      box_count: Number(box_count ?? 0),
+      qty_per_box: Number(qty_per_box ?? 0),
+      product_id,
+    })),
+    categories,
+  };
+}
