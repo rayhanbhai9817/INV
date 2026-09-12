@@ -1,181 +1,107 @@
 "use client";
 
 import { useState } from "react";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { Pagination } from "@/components/ui/Pagination";
-import { SearchInput } from "@/components/ui/SearchInput";
-import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/States";
+import { CheckCheck, Inbox, Loader2 } from "lucide-react";
+
 import { useToast } from "@/components/ui/Toast";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { useNotificationsBadge } from "@/components/providers/NotificationsProvider";
 import { useAsync } from "@/lib/hooks";
-import { allInventory } from "@/lib/db/inventory";
-import {
-  deleteNotification,
-  listNotifications,
-  markAllRead,
-  setNotificationRead,
-  syncLowStockNotifications,
-} from "@/lib/db/notifications";
-import { DEFAULT_PAGE_SIZE } from "@/lib/db/helpers";
+import { listNotifications, markAllRead } from "@/lib/db/notifications";
 import { errorMessage } from "@/lib/supabase";
 import { cn, formatDateTime } from "@/lib/utils";
 
 export default function NotificationsPage() {
   const toast = useToast();
   const { refresh: refreshBadge } = useNotificationsBadge();
-
-  const [unreadOnly, setUnreadOnly] = useState(false);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [busy, setBusy] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [marking, setMarking] = useState(false);
 
   const notifications = useAsync(
-    () => listNotifications({ unreadOnly, search, page, pageSize: DEFAULT_PAGE_SIZE }),
-    [unreadOnly, search, page],
+    () => listNotifications({ page: 1, pageSize: 100 }),
+    [reloadKey],
   );
 
-  async function withBusy(action: () => Promise<void>, successMessage?: string) {
-    setBusy(true);
+  const rows = notifications.data?.rows ?? [];
+
+  async function handleMarkAllRead() {
+    setMarking(true);
     try {
-      await action();
-      if (successMessage) toast.success(successMessage);
-      notifications.reload();
+      await markAllRead();
+      toast.success("All notifications marked as read");
+      setReloadKey((key) => key + 1);
       void refreshBadge();
     } catch (caught) {
       toast.error(errorMessage(caught));
     } finally {
-      setBusy(false);
+      setMarking(false);
     }
   }
 
-  const rows = notifications.data?.rows ?? [];
-
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Notifications"
-        description="Low-stock alerts raised whenever a movement leaves a product at or below its minimum."
-        actions={
-          <>
-            <Button
-              variant="secondary"
-              loading={busy}
-              onClick={() =>
-                withBusy(async () => {
-                  const count = await syncLowStockNotifications(await allInventory());
-                  toast.info(
-                    count === 0
-                      ? "No product is low on stock."
-                      : `${count} product(s) at or below minimum.`,
-                  );
-                })
-              }
-            >
-              Run low-stock check
-            </Button>
-            <Button
-              loading={busy}
-              onClick={() => withBusy(() => markAllRead(), "All notifications marked as read.")}
-            >
-              Mark all read
-            </Button>
-          </>
-        }
-      />
-
-      <Card>
-        <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 p-4">
-          <SearchInput
-            value={search}
-            onChange={(value) => {
-              setSearch(value);
-              setPage(1);
-            }}
-            placeholder="Search messages…"
-          />
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={unreadOnly}
-              onChange={(event) => {
-                setUnreadOnly(event.target.checked);
-                setPage(1);
-              }}
-              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-            />
-            Unread only
-          </label>
+      <div className="flex flex-col justify-between gap-6 rounded-[20px] border border-[#f4f7fe] bg-white p-6 shadow-sm md:flex-row md:items-center">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-[#2b3674]">Activity Alerts</h1>
+          <p className="text-sm font-medium text-[#a3aed0]">
+            Automatic alerts raised when stock falls low or runs out.
+          </p>
         </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleMarkAllRead}
+            disabled={marking}
+            className="flex h-11 items-center rounded-2xl border border-[#f4f7fe] bg-white px-6 text-sm font-bold text-[#2b3674] shadow-sm transition hover:bg-[#f4f7fe] disabled:opacity-60"
+          >
+            <CheckCheck className="mr-2 h-4 w-4" />
+            {marking ? "Marking…" : "Mark all as read"}
+          </button>
+        </div>
+      </div>
 
+      <div className="mb-8 overflow-hidden rounded-[20px] bg-white shadow-sm ring-1 ring-black/5">
         {notifications.loading ? (
-          <TableSkeleton cols={3} />
+          <div className="flex items-center justify-center gap-2 py-12 text-sm text-[#a3aed0]">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          </div>
         ) : notifications.error ? (
-          <ErrorState message={notifications.error} onRetry={notifications.reload} />
+          <div className="flex flex-col items-center justify-center gap-3 py-12 text-sm text-[#ee5d50]">
+            <span>{notifications.error}</span>
+            <button
+              type="button"
+              onClick={notifications.reload}
+              className="rounded-xl border border-[#f4f7fe] px-4 py-2 text-xs font-bold text-[#2b3674] transition hover:bg-[#f4f7fe]"
+            >
+              Try again
+            </button>
+          </div>
         ) : rows.length === 0 ? (
-          <EmptyState
-            title="No notifications"
-            message={
-              unreadOnly ? "Everything has been read." : "Low-stock alerts will appear here."
-            }
-          />
+          <div className="flex flex-col items-center justify-center gap-2 py-12 text-sm text-[#a3aed0]">
+            <Inbox className="h-6 w-6" />
+            No notifications yet
+          </div>
         ) : (
-          <>
-            <ul className="divide-y divide-slate-100">
-              {rows.map((notification) => (
-                <li
-                  key={notification.id}
-                  className={cn(
-                    "flex flex-wrap items-start justify-between gap-3 px-4 py-4",
-                    !notification.is_read && "bg-brand-50/40",
-                  )}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      {!notification.is_read && <Badge tone="info">New</Badge>}
-                      <p className="text-sm text-slate-800">{notification.message}</p>
-                    </div>
-                    <p className="mt-1 text-xs text-slate-400">
-                      {formatDateTime(notification.created_at)}
+          <ul className="divide-y divide-[#f4f7fe]">
+            {rows.map((notification) => (
+              <li
+                key={notification.id}
+                className={cn("px-6 py-4", !notification.is_read && "bg-[#f4f7fe]/40")}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="mb-1.5 text-sm font-bold leading-none text-[#2b3674]">
+                      {notification.message}
                     </p>
                   </div>
-                  <div className="flex shrink-0 gap-2">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={busy}
-                      onClick={() =>
-                        withBusy(() =>
-                          setNotificationRead(notification.id, !notification.is_read),
-                        )
-                      }
-                    >
-                      {notification.is_read ? "Mark unread" : "Mark read"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-red-600 hover:bg-red-50"
-                      disabled={busy}
-                      onClick={() => withBusy(() => deleteNotification(notification.id))}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <Pagination
-              page={page}
-              pageSize={notifications.data?.pageSize ?? DEFAULT_PAGE_SIZE}
-              total={notifications.data?.count ?? 0}
-              onPageChange={setPage}
-            />
-          </>
+                  <span className="whitespace-nowrap font-mono text-[10px] font-bold text-[#a3aed0]">
+                    {formatDateTime(notification.created_at)}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
-      </Card>
+      </div>
     </div>
   );
 }
