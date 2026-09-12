@@ -38,6 +38,11 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
   const [occurredAt, setOccurredAt] = useState(() => new Date().toISOString().slice(0, 16));
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  /**
+   * Issuing stock is irreversible, so Stock OUT keeps its confirmation step
+   * even though the reference form submits straight away.
+   */
+  const [confirming, setConfirming] = useState(false);
 
   // Clearing on product change keeps one product's figures out of another's.
   useEffect(() => {
@@ -73,23 +78,37 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
   const currentUnits = product?.currentUnits ?? 0;
   const resulting = mode === "STOCK_IN" ? currentUnits + movementUnits : currentUnits - movementUnits;
 
-  async function submit() {
+  function handleSave() {
+    if (!validate()) return;
+    if (mode === "STOCK_OUT") {
+      setConfirming(true);
+      return;
+    }
+    void submit();
+  }
+
+  function validate(): boolean {
     if (!product) {
       toast.error("Select a product");
-      return;
+      return false;
     }
     if (movementUnits <= 0) {
       toast.error("Enter a quantity greater than zero");
-      return;
+      return false;
     }
     if (mode === "STOCK_OUT" && movementUnits > currentUnits) {
       toast.error("Not enough stock available for this movement");
-      return;
+      return false;
     }
     if (!reason.trim()) {
       toast.error("A reason is required");
-      return;
+      return false;
     }
+    return true;
+  }
+
+  async function submit() {
+    if (!product) return;
 
     setSaving(true);
     try {
@@ -121,6 +140,7 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
       setNotes("");
       setDestination("");
       setReason(REASONS[mode][0] ?? "");
+      setConfirming(false);
       setReloadKey((key) => key + 1);
       void refreshBadge();
     } catch (caught) {
@@ -266,7 +286,7 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
           <div className="sm:col-span-2 lg:col-span-3">
             <button
               type="button"
-              onClick={submit}
+              onClick={handleSave}
               disabled={saving || !product}
               className={cn(
                 "h-12 rounded-2xl bg-[#4318ff] px-8 font-black uppercase tracking-widest text-white transition-all",
@@ -312,6 +332,50 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
           )}
         </div>
       </div>
+
+      {confirming && product && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-[#0b1437]/40"
+            onClick={() => !saving && setConfirming(false)}
+            aria-hidden
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative z-10 w-full max-w-md rounded-[30px] bg-white p-8 shadow-xl"
+          >
+            <h3 className="text-lg font-black text-[#2b3674]">Confirm Stock OUT</h3>
+            <p className="mt-3 text-sm text-[#a3aed0]">
+              Issue{" "}
+              <span className="font-black text-[#ee5d50]">
+                {formatNumber(movementUnits)} units
+              </span>{" "}
+              of <span className="font-bold text-[#2b3674]">{product.name}</span>? The oldest
+              batches are deducted first and a ledger entry is written for each batch touched.
+              This cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                disabled={saving}
+                className="h-11 rounded-2xl border border-[#f4f7fe] bg-white px-6 text-sm font-bold text-[#2b3674] disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submit()}
+                disabled={saving}
+                className="h-11 rounded-2xl bg-[#4318ff] px-6 text-sm font-black uppercase tracking-widest text-white transition hover:bg-[#3311cc] disabled:opacity-60"
+              >
+                {saving ? "Saving…" : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
