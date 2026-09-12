@@ -31,6 +31,7 @@ import {
 } from "@/lib/db/products";
 import { errorMessage } from "@/lib/supabase";
 import { stockStatusLabel, type StockStatusLabel } from "@/lib/range";
+import { MobileCard, MobileCards } from "@/components/ui/DataCards";
 import { cn, downloadCsv, formatNumber, toCsv } from "@/lib/utils";
 import type { Category, Product, ProductStockRollup } from "@/types";
 
@@ -214,7 +215,7 @@ export default function ProductsPage() {
             Master product directory for inventory identification.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={exportCsv}
@@ -330,7 +331,47 @@ export default function ProductsPage() {
             No products match the current filters
           </div>
         ) : (
-          <div className="custom-scrollbar overflow-x-auto">
+          <>
+            <MobileCards>
+              {pageRows.map((product) => {
+                const rollup = rollupFor(product.id);
+                return (
+                  <MobileCard
+                    key={product.id}
+                    title={product.name}
+                    subtitle={`${product.sku ?? "NO SKU"} · ${categoryName(product.category_id) ?? "Uncategorised"}`}
+                    fields={[
+                      { label: "Total Units", value: formatNumber(rollup.total), tone: "text-[#4318ff]" },
+                      { label: "Boxes", value: formatNumber(rollup.boxes) },
+                      { label: "Loose Units", value: formatNumber(rollup.loose) },
+                      { label: "Min Stock", value: formatNumber(product.min_stock), tone: "text-[#a3aed0]" },
+                    ]}
+                    actions={
+                      <>
+                        <IconButton
+                          label="View details & History"
+                          onClick={() => setViewing(product)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </IconButton>
+                        <IconButton label="Edit product" onClick={() => openEdit(product)}>
+                          <Pencil className="h-4 w-4" />
+                        </IconButton>
+                        <IconButton
+                          label="Delete product"
+                          tone="danger"
+                          onClick={() => setDeleting(product)}
+                        >
+                          <Plus className="h-4 w-4 rotate-45" />
+                        </IconButton>
+                      </>
+                    }
+                  />
+                );
+              })}
+            </MobileCards>
+
+            <div className="custom-scrollbar hidden overflow-x-auto md:block">
             <table className="w-full min-w-[940px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-[#f4f7fe]">
@@ -425,7 +466,8 @@ export default function ProductsPage() {
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#e0e5f2] px-4 py-3 text-sm">

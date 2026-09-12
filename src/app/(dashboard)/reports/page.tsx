@@ -7,6 +7,7 @@ import { useAsync } from "@/lib/hooks";
 import { getLedgerFeed } from "@/lib/db/ledger";
 import { allInventory } from "@/lib/db/inventory";
 import { rangeFor } from "@/lib/range";
+import { MobileCard, MobileCards } from "@/components/ui/DataCards";
 import { cn, downloadCsv, formatNumber, toCsv } from "@/lib/utils";
 
 const PERIODS = [
@@ -195,7 +196,7 @@ export default function ReportsPage() {
             {range.details}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={handleExport}
@@ -268,7 +269,7 @@ export default function ReportsPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
             <Kpi
               label="Opening Stock"
               labelColor="text-[#a3aed0]"
@@ -306,7 +307,7 @@ export default function ReportsPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <StatCard label="Total Products" value={reports.summary.totalProducts} icon={Package} />
             <StatCard label="Categories" value={reports.summary.categories} icon={LayoutGrid} />
             <StatCard
@@ -376,7 +377,22 @@ export default function ReportsPage() {
                   Day-by-Day Activity
                 </h3>
               </div>
-              <div className="custom-scrollbar max-h-[500px] overflow-y-auto">
+              <MobileCards className="max-h-[500px] overflow-y-auto">
+                {reports.daily.map((day, index) => (
+                  <MobileCard
+                    key={index}
+                    title={day.date}
+                    fields={[
+                      { label: "Stock IN", value: `+${formatNumber(day.in)}`, tone: "text-[#05cd99]" },
+                      { label: "Stock OUT", value: `-${formatNumber(day.out)}`, tone: "text-[#ee5d50]" },
+                      { label: "Net", value: `${day.net > 0 ? "+" : ""}${formatNumber(day.net)}`, tone: day.net >= 0 ? "text-[#05cd99]" : "text-[#ee5d50]" },
+                      { label: "Closing", value: formatNumber(day.closing), tone: "text-[#4318ff]" },
+                    ]}
+                  />
+                ))}
+              </MobileCards>
+
+              <div className="custom-scrollbar hidden max-h-[500px] overflow-y-auto md:block">
                 <table className="w-full border-collapse text-left">
                   <thead className="sticky top-0 z-10 bg-white">
                     <tr className="border-b border-[#f4f7fe]">

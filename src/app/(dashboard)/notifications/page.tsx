@@ -46,7 +46,7 @@ export default function NotificationsPage() {
             Automatic alerts raised when stock falls low or runs out.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={handleMarkAllRead}

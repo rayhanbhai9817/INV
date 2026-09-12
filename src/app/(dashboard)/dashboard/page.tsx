@@ -33,6 +33,7 @@ import { ErrorState } from "@/components/ui/States";
 import { useAsync } from "@/lib/hooks";
 import { getDashboardFeed, type DashboardProduct } from "@/lib/db/dashboard";
 import { rangeFor, rangeForMonth, stockStatusLabel } from "@/lib/range";
+import { MobileCard, MobileCards } from "@/components/ui/DataCards";
 import { cn, formatNumber } from "@/lib/utils";
 
 const PIE_COLORS = ["#4318ff", "#6ad2ff", "#05cd99", "#ffb547", "#ee5d50"];
@@ -537,7 +538,7 @@ export default function DashboardPage() {
       ) : (
         <>
           {/* ---------------------- Period summary strip --------------------- */}
-          <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
             <div className="space-y-1 rounded-2xl border border-[#f4f7fe] bg-white p-6 shadow-sm">
               <h2 className="text-lg font-black tracking-tight text-[#2b3674]">
                 {filterInfo.label}
@@ -568,7 +569,7 @@ export default function DashboardPage() {
           </div>
 
           {/* ------------------------- Four summaries ------------------------ */}
-          <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-4">
             <div className="relative overflow-hidden rounded-2xl border border-[#f4f7fe] bg-white p-6 shadow-sm">
               <div className="absolute right-0 top-0 p-4 opacity-5">
                 <ClipboardList className="h-16 w-16 text-[#4318ff]" />
@@ -727,7 +728,7 @@ export default function DashboardPage() {
           </div>
 
           {/* ------------------------------ KPIs ----------------------------- */}
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
             {kpis.map((kpi, index) => (
               <div
                 key={index}
@@ -1007,7 +1008,46 @@ export default function DashboardPage() {
                 Immediate attention required (Out of stock or Low stock)
               </p>
             </div>
-            <div className="overflow-x-auto">
+            <MobileCards>
+              {[...outOfStock, ...lowStock].slice(0, 10).map((product, index) => (
+                <MobileCard
+                  key={index}
+                  title={product.name}
+                  subtitle={product.sku ?? "NO SKU"}
+                  badge={
+                    <span
+                      className={cn(
+                        "rounded-full px-3 py-1 text-[9px] font-black uppercase tracking-widest",
+                        product.totalUnits <= 0
+                          ? "bg-[#ee5d50]/10 text-[#ee5d50]"
+                          : "bg-[#ffb547]/10 text-[#ffb547]",
+                      )}
+                    >
+                      {product.totalUnits <= 0 ? "Out of Stock" : "Low Stock"}
+                    </span>
+                  }
+                  fields={[
+                    { label: "Units", value: formatNumber(product.totalUnits) },
+                    { label: "Min. Threshold", value: formatNumber(product.threshold), tone: "text-[#a3aed0]" },
+                  ]}
+                  footer={
+                    <Link
+                      href="/stock-in"
+                      className="text-[9px] font-black uppercase tracking-widest text-[#4318ff]"
+                    >
+                      Reorder →
+                    </Link>
+                  }
+                />
+              ))}
+              {outOfStock.length === 0 && lowStock.length === 0 && (
+                <p className="px-6 py-12 text-center text-[11px] font-black uppercase tracking-widest text-[#05cd99]">
+                  Inventory health is optimal. No alerts.
+                </p>
+              )}
+            </MobileCards>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full border-collapse text-left">
                 <thead>
                   <tr className="border-b border-[#f4f7fe]">
@@ -1066,7 +1106,30 @@ export default function DashboardPage() {
                   Detailed Reports
                 </Link>
               </div>
-              <div className="overflow-x-auto">
+              <MobileCards>
+                {productHistorical.slice(0, 10).map((product) => (
+                  <MobileCard
+                    key={product.id}
+                    title={product.name}
+                    subtitle={product.sku || "NO SKU"}
+                    fields={[
+                      { label: "Opening", value: formatNumber(product.opening) },
+                      { label: "Closing", value: formatNumber(product.closing), tone: "text-[#4318ff]" },
+                      { label: "IN", value: product.in > 0 ? `+${formatNumber(product.in)}` : "0", tone: "text-[#05cd99]" },
+                      { label: "OUT", value: product.out > 0 ? `-${formatNumber(product.out)}` : "0", tone: "text-[#ee5d50]" },
+                      { label: "Net Flow", value: `${product.net > 0 ? "+" : ""}${formatNumber(product.net)}`, tone: product.net >= 0 ? "text-[#05cd99]" : "text-[#ee5d50]" },
+                      { label: "Current Total", value: formatNumber(product.current) },
+                    ]}
+                  />
+                ))}
+                {productHistorical.length === 0 && (
+                  <p className="px-6 py-12 text-center text-[10px] font-bold uppercase tracking-widest text-[#a3aed0]">
+                    No transaction data for this period
+                  </p>
+                )}
+              </MobileCards>
+
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full border-collapse text-left">
                   <thead className="bg-[#f4f7fe]">
                     <tr>
@@ -1148,7 +1211,36 @@ export default function DashboardPage() {
                   Performance metrics for recent months
                 </p>
               </div>
-              <div className="overflow-x-auto">
+              <MobileCards>
+                {historicalMonths.map((month, index) => (
+                  <MobileCard
+                    key={index}
+                    title={month.month}
+                    fields={[
+                      { label: "Opening", value: formatNumber(month.opening) },
+                      { label: "Closing", value: formatNumber(month.closing), tone: "text-[#4318ff]" },
+                      { label: "IN", value: formatNumber(month.in), tone: "text-[#05cd99]" },
+                      { label: "OUT", value: formatNumber(month.out), tone: "text-[#ee5d50]" },
+                    ]}
+                    footer={
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomFrom(month.startStr);
+                          setCustomTo(month.endStr);
+                          setDateFilter("custom");
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        className="text-[9px] font-black uppercase tracking-widest text-[#4318ff]"
+                      >
+                        Analyze Month
+                      </button>
+                    }
+                  />
+                ))}
+              </MobileCards>
+
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full border-collapse text-left">
                   <thead className="bg-[#f4f7fe]">
                     <tr>
@@ -1216,7 +1308,23 @@ export default function DashboardPage() {
                   Volume distribution by category in selected period
                 </p>
               </div>
-              <div className="overflow-x-auto">
+              <MobileCards>
+                {categoryHistorical.map((category, index) => (
+                  <MobileCard
+                    key={index}
+                    title={category.name}
+                    fields={[
+                      { label: "Opening", value: formatNumber(category.opening) },
+                      { label: "Closing", value: formatNumber(category.closing), tone: "text-[#4318ff]" },
+                      { label: "IN", value: formatNumber(category.in), tone: "text-[#05cd99]" },
+                      { label: "OUT", value: formatNumber(category.out), tone: "text-[#ee5d50]" },
+                      { label: "Current Total", value: formatNumber(category.current), wide: true },
+                    ]}
+                  />
+                ))}
+              </MobileCards>
+
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full border-collapse text-left">
                   <thead className="bg-[#f4f7fe]">
                     <tr>

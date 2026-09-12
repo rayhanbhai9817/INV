@@ -8,6 +8,7 @@ import { useAsync } from "@/lib/hooks";
 import { allCategories } from "@/lib/db/categories";
 import { getInventoryControl, type ControlProduct } from "@/lib/db/inventory";
 import { stockStatusLabel, type StockStatusLabel } from "@/lib/range";
+import { MobileCard, MobileCards } from "@/components/ui/DataCards";
 import { cn, downloadCsv, formatNumber, toCsv } from "@/lib/utils";
 import type { Category } from "@/types";
 
@@ -97,7 +98,7 @@ function InventoryControlCenter() {
             Real-time enterprise stock management and movement analytics.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={exportCsv}
@@ -108,7 +109,7 @@ function InventoryControlCenter() {
         </div>
       </div>
 
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-5">
         <StatItem label="Total Products" value={formatNumber(stats.products)} />
         <StatItem label="Warehouse Boxes" value={formatNumber(stats.boxes)} />
         <StatItem label="Available Units" value={formatNumber(stats.units)} color="text-[#4318ff]" />
@@ -172,7 +173,14 @@ function InventoryControlCenter() {
             No inventory found
           </div>
         ) : (
-          <div className="overflow-x-auto p-6 pt-0">
+          <>
+          <MobileCards>
+            {rows.map((product) => (
+              <MobileProductRow key={product.id} product={product} />
+            ))}
+          </MobileCards>
+
+          <div className="hidden overflow-x-auto p-6 pt-0 md:block">
             <div className="min-w-[1200px]">
               <div className="mb-4 flex border-b border-[#f4f7fe] px-4">
                 <div className="flex min-w-[250px] flex-1 items-center py-5 text-[9px] font-bold uppercase tracking-[0.15em] text-[#2b3674]">
@@ -210,6 +218,7 @@ function InventoryControlCenter() {
               </div>
             </div>
           </div>
+          </>
         )}
       </div>
     </div>
@@ -231,6 +240,161 @@ function StatItem({
         {label}
       </p>
       <h3 className={cn("text-2xl font-black", color)}>{value}</h3>
+    </div>
+  );
+}
+
+function MobileProductRow({ product }: { product: ControlProduct }) {
+  const [open, setOpen] = useState(false);
+  const status = stockStatusLabel(product.available, product.threshold);
+
+  return (
+    <div>
+      <MobileCard
+        onClick={() => setOpen(!open)}
+        title={product.name}
+        subtitle={product.categoryName}
+        badge={
+          <span
+            className={cn(
+              "inline-flex items-center rounded-lg px-2 py-1 text-[9px] font-black uppercase tracking-[0.1em]",
+              STATUS_CLASSES[status],
+            )}
+          >
+            {status}
+          </span>
+        }
+        fields={[
+          { label: "Total Units", value: formatNumber(product.available) },
+          { label: "Boxes", value: formatNumber(product.totalBoxes) },
+          { label: "Stock IN", value: `+${formatNumber(product.totalIn)}`, tone: "text-[#05cd99]" },
+          { label: "Stock OUT", value: `-${formatNumber(product.dispatched)}`, tone: "text-[#ee5d50]" },
+        ]}
+        footer={
+          <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[#4318ff]">
+            {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            {open ? "Hide details" : "View details"}
+          </p>
+        }
+      />
+
+      {open && (
+        <div className="space-y-4 bg-[#f8faff] px-4 pb-5">
+          <Panel title="Product Information">
+            <InfoItem label="SKU" value={product.sku ?? "—"} isMono />
+            <InfoItem
+              label="Units per Box"
+              value={product.unitsPerBox ? formatNumber(product.unitsPerBox) : "—"}
+            />
+            <InfoItem
+              label="Last Updated"
+              value={
+                product.lastMovement
+                  ? new Intl.DateTimeFormat("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    }).format(new Date(product.lastMovement))
+                  : "—"
+              }
+            />
+          </Panel>
+
+          <Panel title="FIFO Batch Inventory">
+            {product.batches.length === 0 ? (
+              <p className="rounded-xl bg-[#f4f7fe] p-3 text-center text-xs italic text-[#a3aed0]">
+                No active batches
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {product.batches.map((batch) => (
+                  <div
+                    key={batch.id}
+                    className="rounded-xl border border-[#f4f7fe] bg-white p-3 text-[11px]"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-[#2b3674]">
+                        BATCH #{batch.id.slice(0, 8).toUpperCase()}
+                      </span>
+                      <span
+                        className={cn(
+                          "rounded-md px-2 py-0.5 text-[9px] font-black uppercase",
+                          batch.remainingUnits === 0
+                            ? "bg-gray-100 text-gray-400"
+                            : "bg-[#05cd99]/10 text-[#05cd99]",
+                        )}
+                      >
+                        {batch.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[9px] font-bold uppercase text-[#a3aed0]">
+                      {batch.receivedAt} · {formatNumber(batch.remainingBoxes)}/
+                      {formatNumber(batch.originalBoxes)} boxes ·{" "}
+                      {formatNumber(batch.unitsPerBox)}/box
+                    </p>
+                    <p className="mt-1 font-black text-[#4318ff]">
+                      {formatNumber(batch.remainingUnits)} units
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Panel>
+
+          <Panel title="Recent Movement History">
+            {product.history.length === 0 ? (
+              <p className="rounded-xl bg-[#f4f7fe] p-3 text-center text-xs italic text-[#a3aed0]">
+                No movement recorded
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {product.history.slice(0, 5).map((movement) => (
+                  <div
+                    key={movement.id}
+                    className="flex items-center justify-between rounded-xl border border-[#f4f7fe] bg-white p-3 text-[11px]"
+                  >
+                    <div>
+                      <span
+                        className={cn(
+                          "rounded px-1.5 py-0.5 text-[9px] font-black uppercase",
+                          movement.type === "IN"
+                            ? "bg-[#05cd99]/10 text-[#05cd99]"
+                            : "bg-[#ee5d50]/10 text-[#ee5d50]",
+                        )}
+                      >
+                        {movement.type === "IN" ? "STOCK IN" : "STOCK OUT"}
+                      </span>
+                      <p className="mt-1 text-[9px] font-bold text-[#a3aed0]">
+                        {new Intl.DateTimeFormat("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: false,
+                        }).format(new Date(movement.occurredAt))}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p
+                        className={cn(
+                          "font-black",
+                          movement.qty > 0 ? "text-[#05cd99]" : "text-[#ee5d50]",
+                        )}
+                      >
+                        {movement.qty > 0 ? "+" : ""}
+                        {formatNumber(movement.qty)}
+                      </p>
+                      <p className="text-[9px] font-bold text-[#a3aed0]">
+                        Bal {formatNumber(movement.balance)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Panel>
+        </div>
+      )}
     </div>
   );
 }

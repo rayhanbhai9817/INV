@@ -16,6 +16,7 @@ import {
   type PriceInput,
 } from "@/lib/db/prices";
 import { errorMessage } from "@/lib/supabase";
+import { MobileCard, MobileCards } from "@/components/ui/DataCards";
 import { cn, downloadCsv, formatMoney, formatNumber, todayISO, toCsv } from "@/lib/utils";
 import type { Product, ProductPriceWithProduct } from "@/types";
 
@@ -227,7 +228,7 @@ export default function ProductPricePage() {
             Standalone unit pricing. Independent of stock movements and the ledger.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={exportCsv}
@@ -246,7 +247,7 @@ export default function ProductPricePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <SummaryCard
           label="Entries"
           value={formatNumber(summary.entries)}
@@ -338,7 +339,41 @@ export default function ProductPricePage() {
             No price entries yet
           </div>
         ) : (
-          <div className="custom-scrollbar overflow-x-auto">
+          <>
+            <MobileCards>
+              {rows.map((row) => (
+                <MobileCard
+                  key={row.id}
+                  title={displayName(row)}
+                  subtitle={displaySku(row)}
+                  fields={[
+                    { label: "Total Price", value: formatMoney(row.total_price, settings.currency), tone: "text-[#4318ff]" },
+                    { label: "Unit Price", value: formatMoney(row.unit_price, settings.currency) },
+                    { label: "Unit", value: formatNumber(row.unit) },
+                    { label: "Date", value: row.date, tone: "text-[#a3aed0]" },
+                    ...(row.note
+                      ? [{ label: "Note", value: row.note, tone: "text-[#a3aed0]", wide: true }]
+                      : []),
+                  ]}
+                  actions={
+                    <>
+                      <IconButton label="Edit price" onClick={() => openEdit(row)}>
+                        <Pencil className="h-4 w-4" />
+                      </IconButton>
+                      <IconButton
+                        label="Delete price"
+                        tone="danger"
+                        onClick={() => setRemoving(row)}
+                      >
+                        <X className="h-4 w-4" />
+                      </IconButton>
+                    </>
+                  }
+                />
+              ))}
+            </MobileCards>
+
+            <div className="custom-scrollbar hidden overflow-x-auto md:block">
             <table className="w-full min-w-[900px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-[#f4f7fe]">
@@ -403,7 +438,8 @@ export default function ProductPricePage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#e0e5f2] px-4 py-3 text-sm">

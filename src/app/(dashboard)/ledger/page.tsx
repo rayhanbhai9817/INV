@@ -8,6 +8,7 @@ import { useAsync, useDebounced } from "@/lib/hooks";
 import { getLedgerFeed, type LedgerFeedRow } from "@/lib/db/ledger";
 import { allProducts } from "@/lib/db/products";
 import { rangeFor } from "@/lib/range";
+import { MobileCard, MobileCards } from "@/components/ui/DataCards";
 import { cn, downloadCsv, formatDateTime, formatNumber, toCsv } from "@/lib/utils";
 import type { LedgerType, Product } from "@/types";
 
@@ -180,7 +181,7 @@ function LedgerView() {
             {range.details}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={exportCsv}
@@ -192,7 +193,7 @@ function LedgerView() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
         <SummaryCard
           label="Opening Stock"
           labelColor="text-[#a3aed0]"
@@ -329,7 +330,14 @@ function LedgerView() {
             No transactions in this range
           </div>
         ) : (
-          <div className="custom-scrollbar overflow-x-auto">
+          <>
+            <MobileCards>
+              {pageRows.map((row) => (
+                <LedgerCard key={row.id} row={row} />
+              ))}
+            </MobileCards>
+
+            <div className="custom-scrollbar hidden overflow-x-auto md:block">
             <table className="w-full min-w-[1280px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-[#f4f7fe]">
@@ -353,7 +361,8 @@ function LedgerView() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#e0e5f2] px-4 py-3 text-sm">
@@ -382,6 +391,57 @@ function LedgerView() {
         </div>
       </div>
     </div>
+  );
+}
+
+function LedgerCard({ row }: { row: LedgerFeedRow }) {
+  const isIn = row.type === "IN";
+  const tone = isIn ? "text-[#05cd99]" : "text-[#ee5d50]";
+
+  return (
+    <MobileCard
+      title={row.productName}
+      subtitle={row.productSku ?? "NO SKU"}
+      badge={
+        <span
+          className={cn(
+            "inline-flex items-center rounded-lg px-2 py-1 text-[9px] font-black uppercase tracking-[0.1em]",
+            isIn ? "bg-[#05cd99]/10 text-[#05cd99]" : "bg-[#ffb547]/10 text-[#ffb547]",
+          )}
+        >
+          {isIn ? "+STOCK IN" : "-STOCK OUT"}
+        </span>
+      }
+      fields={[
+        {
+          label: "Units +/-",
+          value: `${row.unitsDelta > 0 ? "+" : ""}${formatNumber(row.unitsDelta)}`,
+          tone,
+        },
+        {
+          label: "Boxes +/-",
+          value: `${row.boxesDelta > 0 ? "+" : ""}${formatNumber(row.boxesDelta)}`,
+          tone,
+        },
+        { label: "Units: Prev → New", value: `${formatNumber(row.prevUnits)} → ${formatNumber(row.newUnits)}`, wide: true },
+        { label: "Boxes: Prev → New", value: `${formatNumber(row.prevBoxes)} → ${formatNumber(row.newBoxes)}` },
+        { label: "Units / Box", value: formatNumber(row.unitsPerBox), tone: "text-[#a3aed0]" },
+        { label: "Date", value: formatDateTime(row.occurredAt), tone: "text-[#a3aed0]", wide: true },
+        ...(row.reference
+          ? [{ label: "Note / Reason", value: row.reference, tone: "text-[#a3aed0]", wide: true }]
+          : []),
+        ...(row.batchId
+          ? [
+              {
+                label: "FIFO Batch",
+                value: row.batchId.split("-")[0],
+                tone: "text-[#4318ff]",
+                wide: true,
+              },
+            ]
+          : []),
+      ]}
+    />
   );
 }
 

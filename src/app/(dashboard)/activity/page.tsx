@@ -13,6 +13,7 @@ import {
 import { useAsync, useDebounced } from "@/lib/hooks";
 import { listActivity, type ActivityRow } from "@/lib/db/activity";
 import { rangeFor } from "@/lib/range";
+import { MobileCard, MobileCards } from "@/components/ui/DataCards";
 import { cn, formatNumber } from "@/lib/utils";
 import type { LedgerType } from "@/types";
 
@@ -175,7 +176,14 @@ export default function DailyActivityPage() {
             No activity recorded for this period
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            <MobileCards>
+              {rows.map((row) => (
+                <ActivityCard key={row.id} row={row} />
+              ))}
+            </MobileCards>
+
+            <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[900px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-[#f4f7fe]">
@@ -208,7 +216,8 @@ export default function DailyActivityPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#f4f7fe] px-4 py-3 text-sm">
@@ -236,6 +245,44 @@ export default function DailyActivityPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function ActivityCard({ row }: { row: ActivityRow }) {
+  const isIn = row.type === "IN";
+
+  return (
+    <MobileCard
+      title={row.productName}
+      subtitle={row.productSku ?? "NO SKU"}
+      badge={
+        <span
+          className={cn(
+            "inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold",
+            isIn ? "bg-[#05cd99]/10 text-[#05cd99]" : "bg-[#ee5d50]/10 text-[#ee5d50]",
+          )}
+        >
+          {isIn ? "STOCK IN" : "STOCK OUT"}
+        </span>
+      }
+      fields={[
+        { label: "Qty Change", value: `${row.unitsAffected > 0 ? "+" : ""}${formatNumber(row.unitsAffected)} units`, tone: isIn ? "text-[#05cd99]" : "text-[#ee5d50]" },
+        { label: "Inventory", value: formatNumber(row.newInventory) },
+        { label: "Action", value: row.actionLabel },
+        { label: "Previous", value: formatNumber(row.prevInventory), tone: "text-[#a3aed0]" },
+        ...(isIn && row.boxes !== 0
+          ? [
+              {
+                label: "Packing",
+                value: `${formatNumber(row.boxes)} boxes × ${row.unitsPerBox}`,
+                tone: "text-[#a3aed0]",
+                wide: true,
+              },
+            ]
+          : []),
+        { label: "Timestamp", value: `${clockTime(row.created_at)} · ${dayStamp(row.created_at)}`, tone: "text-[#a3aed0]", wide: true },
+      ]}
+    />
   );
 }
 

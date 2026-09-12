@@ -54,7 +54,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       />
       <div className="lg:pl-72">
         <Header onMenuClick={() => setDrawerOpen(true)} unreadCount={unreadCount} />
-        <main className="min-h-[calc(100vh-64px)] p-4 lg:p-8">{children}</main>
+        <main className="min-h-[calc(100vh-64px)] p-3 sm:p-4 lg:p-8">{children}</main>
       </div>
     </div>
   );
