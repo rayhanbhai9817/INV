@@ -111,6 +111,7 @@ src/
     modules/                       StockInForm, StockOutForm, LedgerTable, ProductForm…
     providers/                     Auth, Settings, Notifications context
 supabase/schema.sql                Tables, view, indexes, constraints, RLS
+supabase/schema-from-spec.sql      The schema exactly as written in the brief
 tests/fifo.test.ts                 FIFO edge cases
 docs/DEPLOYMENT.md                 Hostinger deployment
 ```
