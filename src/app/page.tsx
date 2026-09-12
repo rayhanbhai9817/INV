@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Logo } from "@/components/layout/Logo";
 import { useAuth } from "@/components/providers/AuthProvider";
 
 /** Entry point: sends the visitor to the dashboard or to login. */
@@ -16,9 +15,8 @@ export default function RootPage() {
   }, [user, loading, router]);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6">
-      <Logo height={44} />
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+    <main className="flex min-h-screen items-center justify-center bg-[#0b1437]">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
     </main>
   );
 }
