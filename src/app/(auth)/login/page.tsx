@@ -57,9 +57,6 @@ export default function LoginPage() {
             <ShieldCheck className="h-8 w-8 text-[#1b2559]" strokeWidth={2} />
           </div>
 
-          <p className="mb-3 text-[11px] font-black uppercase tracking-[0.35em] text-[#707eae]">
-            Ozipco Inventory
-          </p>
           <h1 className="text-4xl font-black leading-none tracking-tight text-white sm:text-5xl">
             OZIPCO Inventory
           </h1>
