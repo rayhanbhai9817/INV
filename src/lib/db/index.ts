@@ -1,4 +1,5 @@
 export * from "@/lib/db/helpers";
+export * as activity from "@/lib/db/activity";
 export * as auth from "@/lib/db/auth";
 export * as categories from "@/lib/db/categories";
 export * as dashboard from "@/lib/db/dashboard";

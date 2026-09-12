@@ -1,6 +1,6 @@
-# Fast Sold Inventory Management System
+# Ozipco Inventory Management System
 
-Production-ready inventory system for **Fast Sold LLC** — Next.js 14 (App Router) +
+Production-ready inventory system for **Ozipco** — Next.js 14 (App Router) +
 TypeScript + Tailwind CSS on the front end, Supabase (PostgreSQL + Auth) as the only
 back end. There is no Laravel or Node API layer: the Supabase JavaScript client is
 called from a dedicated service layer in `src/lib/db/`.

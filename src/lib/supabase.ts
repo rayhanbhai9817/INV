@@ -16,11 +16,11 @@ const MISSING_ENV_MESSAGE =
  * vars in scope.
  */
 const globalForSupabase = globalThis as typeof globalThis & {
-  __fastsold_supabase__?: SupabaseClient;
+  __ozipco_supabase__?: SupabaseClient;
 };
 
 function getClient(): SupabaseClient {
-  if (globalForSupabase.__fastsold_supabase__) return globalForSupabase.__fastsold_supabase__;
+  if (globalForSupabase.__ozipco_supabase__) return globalForSupabase.__ozipco_supabase__;
   if (!supabaseUrl || !supabaseAnonKey) throw new Error(MISSING_ENV_MESSAGE);
 
   const client = createClient(supabaseUrl, supabaseAnonKey, {
@@ -28,11 +28,11 @@ function getClient(): SupabaseClient {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      storageKey: "fastsold-auth",
+      storageKey: "ozipco-auth",
     },
   });
 
-  globalForSupabase.__fastsold_supabase__ = client;
+  globalForSupabase.__ozipco_supabase__ = client;
   return client;
 }
 

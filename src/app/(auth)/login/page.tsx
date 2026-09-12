@@ -51,7 +51,7 @@ export default function LoginPage() {
           {/* ----------------------------- Brand ---------------------------- */}
           <div className="mb-8">
             <Logo height={38} />
-            <p className="mt-4 text-sm font-bold tracking-tight text-slate-900">Fast Sold LLC</p>
+            <p className="mt-4 text-sm font-bold tracking-tight text-slate-900">Ozipco</p>
           </div>
 
           <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-[2rem]">
@@ -74,7 +74,7 @@ export default function LoginPage() {
                 autoComplete="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@fastsold.com"
+                placeholder="you@ozipco.com"
                 aria-invalid={Boolean(fieldErrors.email)}
                 className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 ${
                   fieldErrors.email

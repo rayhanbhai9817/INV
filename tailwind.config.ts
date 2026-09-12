@@ -27,6 +27,23 @@ const config: Config = {
           800: "#1f2937",
           700: "#374151",
         },
+        /** Deep navy used by the app shell and headings. */
+        navy: {
+          950: "#0a1030",
+          900: "#0e1638",
+          800: "#151f4a",
+          700: "#1d2a63",
+          600: "#26357c",
+          500: "#3a4a96",
+          300: "#8f9cc9",
+          200: "#c2cae6",
+        },
+        /** Page ground. */
+        canvas: "#f4f6fc",
+      },
+      fontFamily: {
+        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+        serif: ["var(--font-serif)", "Georgia", "Cambria", "serif"],
       },
       keyframes: {
         "fade-in": {

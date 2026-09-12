@@ -1,5 +1,5 @@
 -- =====================================================================
--- Fast Sold LLC — Inventory Management System
+-- Ozipco — Inventory Management System
 -- DATABASE TABLES (run in Supabase SQL Editor)
 --
 -- This is the schema exactly as specified in the project document:

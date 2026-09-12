@@ -3,7 +3,7 @@
 import { supabase } from "@/lib/supabase";
 import { assertOk, paginated, rangeFor, type PageParams } from "@/lib/db/helpers";
 import { escapeLike } from "@/lib/utils";
-import type { Paginated, Product, ProductWithRelations } from "@/types";
+import type { Paginated, Product, ProductWithRelations, ProductStockRollup } from "@/types";
 
 const SELECT_WITH_RELATIONS =
   "*, category:categories(id,name), supplier:suppliers(id,name)";
@@ -97,4 +97,48 @@ export async function deleteProduct(id: string): Promise<void> {
 
   const { error } = await supabase.from("products").delete().eq("id", id);
   assertOk(error);
+}
+
+/**
+ * Box / loose / total breakdown per product, derived from the open batches.
+ *
+ * Boxes are whole cartons still on hand and loose units are the remainder, so
+ * boxes x qty_per_box + loose = the units the inventory view reports. Nothing
+ * here writes, and no new column is required.
+ */
+export async function getStockRollups(
+  productIds: string[],
+): Promise<Record<string, ProductStockRollup>> {
+  if (productIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from("stock_batches")
+    .select("product_id,remaining_qty,qty_per_box")
+    .in("product_id", productIds)
+    .gt("remaining_qty", 0);
+  assertOk(error);
+
+  const rollups: Record<string, ProductStockRollup> = {};
+  for (const id of productIds) {
+    rollups[id] = { boxes: 0, loose: 0, total: 0 };
+  }
+
+  for (const batch of data ?? []) {
+    const id = String(batch.product_id);
+    const perBox = Number(batch.qty_per_box ?? 0);
+    const remaining = Number(batch.remaining_qty ?? 0);
+    const rollup = rollups[id] ?? { boxes: 0, loose: 0, total: 0 };
+
+    rollup.total += remaining;
+    if (perBox > 0) {
+      rollup.boxes += Math.floor(remaining / perBox);
+      rollup.loose += remaining % perBox;
+    } else {
+      rollup.loose += remaining;
+    }
+    rollups[id] = rollup;
+  }
+
+  // Loose units can add up to whole boxes once batches are combined.
+  return rollups;
 }

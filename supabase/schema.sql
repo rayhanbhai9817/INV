@@ -1,5 +1,5 @@
 -- =====================================================================
--- Fast Sold LLC — Inventory Management System
+-- Ozipco — Inventory Management System
 -- Supabase / PostgreSQL schema
 -- Run this whole file once in: Supabase Dashboard -> SQL Editor -> New query
 -- =====================================================================
@@ -207,7 +207,7 @@ GRANT SELECT ON inventory TO authenticated;
 -- Default settings rows
 -- =====================================================================
 INSERT INTO settings (key, value) VALUES
-  ('company_name',        'Fast Sold LLC'),
+  ('company_name',        'Ozipco'),
   ('low_stock_threshold', '10'),
   ('currency',            'USD'),
   ('date_format',         'YYYY-MM-DD'),

@@ -12,8 +12,7 @@ body {
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  @apply bg-canvas text-navy-800 antialiased;
 }
 
 /* Hide the native clear button so search inputs keep one consistent look. */

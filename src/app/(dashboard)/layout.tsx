@@ -28,7 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-navy-700 border-t-transparent" />
       </div>
     );
   }
@@ -50,7 +50,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const { unreadCount } = useNotificationsBadge();
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-canvas">
       <Sidebar
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -61,11 +61,11 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div
         className={cn(
           "transition-[padding] duration-200 ease-out",
-          collapsed ? "lg:pl-[72px]" : "lg:pl-[260px]",
+          collapsed ? "lg:pl-[76px]" : "lg:pl-[230px]",
         )}
       >
         <Header onMenuClick={() => setDrawerOpen(true)} unreadCount={unreadCount} />
-        <main className="px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="px-4 py-6 sm:px-6 lg:px-7">{children}</main>
       </div>
     </div>
   );

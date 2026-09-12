@@ -68,7 +68,7 @@ Then install and start:
 ```bash
 npm ci --omit=dev
 npm run build
-npm start          # or: pm2 start npm --name fastsold-inventory -- start
+npm start          # or: pm2 start npm --name ozipco-inventory -- start
 ```
 
 ### VPS: nginx in front
@@ -113,7 +113,7 @@ Supabase auth tokens are stored in the browser.
 git pull
 npm ci
 npm run build
-pm2 restart fastsold-inventory     # or restart the app in hPanel
+pm2 restart ozipco-inventory     # or restart the app in hPanel
 ```
 
 Database changes go through the Supabase SQL Editor. `supabase/schema.sql` is

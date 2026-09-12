@@ -107,6 +107,13 @@ export interface Setting {
   value: string | null;
 }
 
+/** Derived box / loose / total split shown on the Products table. */
+export interface ProductStockRollup {
+  boxes: number;
+  loose: number;
+  total: number;
+}
+
 export type StockStatus = "ok" | "low_stock" | "out_of_stock";
 
 /** Row shape of the `inventory` SQL view. */
@@ -137,10 +144,28 @@ export interface DashboardStats {
   totalCategories: number;
   totalSuppliers: number;
   totalStockUnits: number;
+  /** Approximate boxes still on hand, rounded up per open batch. */
+  totalBoxes: number;
   lowStockCount: number;
   outOfStockCount: number;
+  /** Share of products that are neither low nor out of stock. */
+  healthPercent: number;
   stockInToday: number;
+  stockInBoxesToday: number;
   stockOutToday: number;
+  stockOutOrdersToday: number;
+}
+
+export type StatsPeriod = "today" | "yesterday" | "week" | "month";
+
+export interface PeriodStats {
+  from: string;
+  to: string;
+  stockIn: number;
+  stockOut: number;
+  netFlow: number;
+  opening: number;
+  closing: number;
 }
 
 export interface Paginated<T> {

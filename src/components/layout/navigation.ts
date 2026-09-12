@@ -1,57 +1,43 @@
 import {
-  BarChart2,
+  Activity,
+  BarChart3,
   Bell,
   BookOpen,
+  Boxes,
   DollarSign,
   LayoutDashboard,
   Package,
-  PackageMinus,
-  PackagePlus,
   Settings,
-  Tag,
+  Tags,
+  TrendingDown,
+  TrendingUp,
   Truck,
-  Warehouse,
   type LucideIcon,
 } from "lucide-react";
-
-export type NavGroup = "Overview" | "Inventory" | "Finance" | "Reports & Logs" | "System";
 
 export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  group: NavGroup;
-  /** Small colour cue on the icon, for the two movement actions. */
-  accent?: "green" | "red";
   /** Renders the unread notification count. */
   badge?: "unread";
 }
 
+/** Single flat list, in the order the shell presents it. */
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", group: "Overview", icon: LayoutDashboard },
-
-  { href: "/products", label: "Products", group: "Inventory", icon: Package },
-  { href: "/categories", label: "Category", group: "Inventory", icon: Tag },
-  { href: "/suppliers", label: "Supplier", group: "Inventory", icon: Truck },
-  { href: "/inventory", label: "Inventory", group: "Inventory", icon: Warehouse },
-  { href: "/stock-in", label: "Stock In", group: "Inventory", icon: PackagePlus, accent: "green" },
-  { href: "/stock-out", label: "Stock Out", group: "Inventory", icon: PackageMinus, accent: "red" },
-
-  { href: "/prices", label: "Product Price", group: "Finance", icon: DollarSign },
-
-  { href: "/reports", label: "Report", group: "Reports & Logs", icon: BarChart2 },
-  { href: "/ledger", label: "Ledger Account", group: "Reports & Logs", icon: BookOpen },
-
-  { href: "/notifications", label: "Notification", group: "System", icon: Bell, badge: "unread" },
-  { href: "/settings", label: "Settings", group: "System", icon: Settings },
-];
-
-export const NAV_GROUPS: NavGroup[] = [
-  "Overview",
-  "Inventory",
-  "Finance",
-  "Reports & Logs",
-  "System",
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/activity", label: "Daily Activity", icon: Activity },
+  { href: "/products", label: "Products", icon: Package },
+  { href: "/inventory", label: "Inventory", icon: Boxes },
+  { href: "/stock-in", label: "Stock IN", icon: TrendingUp },
+  { href: "/stock-out", label: "Stock OUT", icon: TrendingDown },
+  { href: "/categories", label: "Categories", icon: Tags },
+  { href: "/suppliers", label: "Suppliers", icon: Truck },
+  { href: "/ledger", label: "Stock Ledger", icon: BookOpen },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/prices", label: "Product Price", icon: DollarSign },
+  { href: "/notifications", label: "Notifications", icon: Bell, badge: "unread" },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 /** Human label for a pathname, used by the breadcrumb and page title. */

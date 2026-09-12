@@ -5,7 +5,7 @@ import { assertOk } from "@/lib/db/helpers";
 import type { AppSettings, Setting } from "@/types";
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  company_name: "Fast Sold LLC",
+  company_name: "Ozipco",
   low_stock_threshold: 10,
   currency: "USD",
   date_format: "YYYY-MM-DD",
