@@ -30,6 +30,8 @@ export interface PriceInput {
   unit: number;
   date: string;
   note: string | null;
+  /** Object path in the product-images bucket, or null for no image. */
+  image_url: string | null;
 }
 
 /**
@@ -43,6 +45,12 @@ function describeWriteError(error: unknown): never {
     throw new Error(
       "This database does not have the product_name column yet. Run " +
         "supabase/migrations/20260912_product_prices_manual_name.sql in the Supabase SQL Editor.",
+    );
+  }
+  if (message.includes("image_url")) {
+    throw new Error(
+      "This database does not have the product_prices.image_url column yet. Run " +
+        "supabase/migrations/20260913_images_descriptions_and_view_fix.sql in the Supabase SQL Editor.",
     );
   }
   throw error instanceof Error ? error : new Error(message);

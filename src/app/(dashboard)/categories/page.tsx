@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Inbox, Loader2, Pencil, Plus, X } from "lucide-react";
 
+import { MobileCard, MobileCards } from "@/components/ui/DataCards";
 import { useToast } from "@/components/ui/Toast";
 import { useAsync } from "@/lib/hooks";
 import {
@@ -23,6 +24,7 @@ export default function CategoriesPage() {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
 
   const [removing, setRemoving] = useState<Category | null>(null);
@@ -48,6 +50,14 @@ export default function CategoriesPage() {
   function openCreate() {
     setEditingId(null);
     setName("");
+    setDescription("");
+    setOpen(true);
+  }
+
+  function openEdit(category: Category) {
+    setEditingId(category.id);
+    setName(category.name);
+    setDescription(category.description ?? "");
     setOpen(true);
   }
 
@@ -58,11 +68,15 @@ export default function CategoriesPage() {
     }
     setSaving(true);
     try {
+      const input = {
+        name: name.trim().slice(0, 120),
+        description: description.trim() ? description.trim().slice(0, 500) : null,
+      };
       if (editingId) {
-        await updateCategory(editingId, name.trim().slice(0, 120));
+        await updateCategory(editingId, input);
         toast.success("Category updated");
       } else {
-        await createCategory(name.trim().slice(0, 120));
+        await createCategory(input);
         toast.success("Category created");
       }
       setOpen(false);
@@ -131,6 +145,42 @@ export default function CategoriesPage() {
             No categories yet
           </div>
         ) : (
+          <>
+            <MobileCards>
+              {categories.map((category) => (
+                <MobileCard
+                  key={category.id}
+                  title={category.name}
+                  subtitle={`${formatNumber(counts.get(category.id) ?? 0)} product${
+                    (counts.get(category.id) ?? 0) === 1 ? "" : "s"
+                  }`}
+                  fields={[
+                    {
+                      label: "Description",
+                      value: category.description ?? "—",
+                      tone: category.description ? undefined : "text-[#a3aed0]",
+                      wide: true,
+                    },
+                  ]}
+                  actions={
+                    <>
+                      <IconButton label="Edit category" onClick={() => openEdit(category)}>
+                        <Pencil className="h-4 w-4" />
+                      </IconButton>
+                      <IconButton
+                        label="Delete category"
+                        tone="danger"
+                        onClick={() => setRemoving(category)}
+                      >
+                        <X className="h-4 w-4" />
+                      </IconButton>
+                    </>
+                  }
+                />
+              ))}
+            </MobileCards>
+
+            <div className="custom-scrollbar hidden overflow-x-auto md:block">
           <table className="w-full border-collapse text-left">
             <thead>
               <tr className="border-b border-[#f4f7fe]">
@@ -155,20 +205,19 @@ export default function CategoriesPage() {
                   className="border-b border-[#f4f7fe] transition-colors hover:bg-[#f4f7fe]/30"
                 >
                   <td className="px-6 py-4 font-bold text-[#2b3674]">{category.name}</td>
-                  <td className="px-6 py-4 font-medium text-[#a3aed0]">—</td>
+                  <td className="max-w-xs px-6 py-4 font-medium text-[#a3aed0]">
+                    {category.description ? (
+                      <span className="text-[#2b3674]">{category.description}</span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-right font-black text-[#2b3674]">
                     {formatNumber(counts.get(category.id) ?? 0)}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <IconButton
-                        label="Edit category"
-                        onClick={() => {
-                          setEditingId(category.id);
-                          setName(category.name);
-                          setOpen(true);
-                        }}
-                      >
+                      <IconButton label="Edit category" onClick={() => openEdit(category)}>
                         <Pencil className="h-4 w-4" />
                       </IconButton>
                       <IconButton
@@ -184,6 +233,8 @@ export default function CategoriesPage() {
               ))}
             </tbody>
           </table>
+            </div>
+          </>
         )}
       </div>
 
@@ -207,6 +258,23 @@ export default function CategoriesPage() {
                 maxLength={120}
                 autoFocus
                 className="h-12 w-full rounded-2xl border border-[#f4f7fe] bg-[#f4f7fe] px-4 font-bold text-[#2b3674] outline-none focus:ring-2 focus:ring-[#4318ff]/20"
+              />
+            </div>
+            <div className="space-y-2">
+              <label
+                htmlFor="cat-description"
+                className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]"
+              >
+                Description
+              </label>
+              <textarea
+                id="cat-description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                maxLength={500}
+                rows={3}
+                placeholder="What belongs in this category? (optional)"
+                className="w-full resize-none rounded-2xl border border-[#f4f7fe] bg-[#f4f7fe] px-4 py-3 text-sm font-medium text-[#2b3674] outline-none placeholder:text-[#a3aed0] focus:ring-2 focus:ring-[#4318ff]/20"
               />
             </div>
           </div>

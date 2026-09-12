@@ -5,6 +5,38 @@ import { assertOk, paginated, rangeFor, type PageParams } from "@/lib/db/helpers
 import { escapeLike } from "@/lib/utils";
 import type { InventoryRow, Paginated, StockStatus } from "@/types";
 
+/**
+ * Fills in `category_id` / `supplier_id` from the products table.
+ *
+ * The `inventory` view in the original specification selects neither column, so
+ * a database created from that script returns them as undefined and every
+ * grouped report collapses into "Uncategorized". Reading the two ids from
+ * products keeps the reports correct on both versions of the view.
+ */
+async function attachProductRefs(rows: InventoryRow[]): Promise<InventoryRow[]> {
+  if (rows.length === 0) return rows;
+  if (rows.every((row) => row.category_id !== undefined && row.supplier_id !== undefined)) {
+    return rows;
+  }
+
+  const { data, error } = await supabase
+    .from("products")
+    .select("id,category_id,supplier_id")
+    .in("id", rows.map((row) => row.id));
+  assertOk(error);
+
+  const refs = new Map(
+    ((data ?? []) as Array<{ id: string; category_id: string | null; supplier_id: string | null }>)
+      .map((row) => [row.id, row]),
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    category_id: row.category_id ?? refs.get(row.id)?.category_id ?? null,
+    supplier_id: row.supplier_id ?? refs.get(row.id)?.supplier_id ?? null,
+  }));
+}
+
 export interface InventoryFilters extends PageParams {
   search?: string;
   status?: StockStatus | "";
@@ -22,13 +54,23 @@ export async function listInventory(
     query = query.or(`name.ilike.%${term}%,sku.ilike.%${term}%`);
   }
   if (filters.status) query = query.eq("stock_status", filters.status);
-  if (filters.categoryId) query = query.eq("category_id", filters.categoryId);
-  if (filters.supplierId) query = query.eq("supplier_id", filters.supplierId);
+
+  // Resolve category / supplier through products rather than the view.
+  if (filters.categoryId || filters.supplierId) {
+    let scope = supabase.from("products").select("id");
+    if (filters.categoryId) scope = scope.eq("category_id", filters.categoryId);
+    if (filters.supplierId) scope = scope.eq("supplier_id", filters.supplierId);
+    const { data: scoped, error: scopeError } = await scope;
+    assertOk(scopeError);
+    const ids = (scoped ?? []).map((row) => row.id as string);
+    if (ids.length === 0) return paginated<InventoryRow>([], 0, filters);
+    query = query.in("id", ids);
+  }
 
   const [from, to] = rangeFor(filters);
   const { data, count, error } = await query.order("name", { ascending: true }).range(from, to);
   assertOk(error);
-  return paginated<InventoryRow>(data as InventoryRow[], count, filters);
+  return paginated<InventoryRow>(await attachProductRefs(data as InventoryRow[]), count, filters);
 }
 
 /** One product's live stock row — used by the Stock Out form. */
@@ -39,7 +81,9 @@ export async function getInventoryRow(productId: string): Promise<InventoryRow |
     .eq("id", productId)
     .maybeSingle();
   assertOk(error);
-  return (data as InventoryRow) ?? null;
+  if (!data) return null;
+  const [row] = await attachProductRefs([data as InventoryRow]);
+  return row ?? null;
 }
 
 export async function listLowStock(limit = 100): Promise<InventoryRow[]> {
@@ -50,7 +94,7 @@ export async function listLowStock(limit = 100): Promise<InventoryRow[]> {
     .order("current_stock", { ascending: true })
     .limit(limit);
   assertOk(error);
-  return (data ?? []) as InventoryRow[];
+  return attachProductRefs((data ?? []) as InventoryRow[]);
 }
 
 export async function allInventory(): Promise<InventoryRow[]> {
@@ -59,7 +103,7 @@ export async function allInventory(): Promise<InventoryRow[]> {
     .select("*")
     .order("name", { ascending: true });
   assertOk(error);
-  return (data ?? []) as InventoryRow[];
+  return attachProductRefs((data ?? []) as InventoryRow[]);
 }
 
 // ---------------------------------------------------------------------------
@@ -108,8 +152,11 @@ export interface ControlProduct {
  * row costs nothing extra.
  */
 export async function getInventoryControl(): Promise<ControlProduct[]> {
-  const [inventoryRes, categoriesRes, batchesRes, ledgerRes] = await Promise.all([
+  const [inventoryRes, productsRes, categoriesRes, batchesRes, ledgerRes] = await Promise.all([
     supabase.from("inventory").select("*").order("name", { ascending: true }),
+    // As on the dashboard, category comes from products so the page works
+    // whichever version of the inventory view the database carries.
+    supabase.from("products").select("id,category_id"),
     supabase.from("categories").select("id,name"),
     supabase
       .from("stock_batches")
@@ -123,6 +170,7 @@ export async function getInventoryControl(): Promise<ControlProduct[]> {
   ]);
 
   assertOk(inventoryRes.error);
+  assertOk(productsRes.error);
   assertOk(categoriesRes.error);
   assertOk(batchesRes.error);
   assertOk(ledgerRes.error);
@@ -131,6 +179,13 @@ export async function getInventoryControl(): Promise<ControlProduct[]> {
     ((categoriesRes.data ?? []) as Array<{ id: string; name: string }>).map((row) => [
       row.id,
       row.name,
+    ]),
+  );
+
+  const categoryByProduct = new Map(
+    ((productsRes.data ?? []) as Array<{ id: string; category_id: string | null }>).map((row) => [
+      row.id,
+      row.category_id,
     ]),
   );
 
@@ -200,13 +255,14 @@ export async function getInventoryControl(): Promise<ControlProduct[]> {
 
   return ((inventoryRes.data ?? []) as InventoryRow[]).map((row) => {
     const running = totals.get(row.id) ?? { in: 0, out: 0, last: null };
+    const categoryId = categoryByProduct.get(row.id) ?? row.category_id ?? null;
     return {
       id: row.id,
       name: row.name,
       sku: row.sku,
-      category_id: row.category_id,
-      categoryName: row.category_id
-        ? (categoryNames.get(row.category_id) ?? "Uncategorized")
+      category_id: categoryId,
+      categoryName: categoryId
+        ? (categoryNames.get(categoryId) ?? "Uncategorized")
         : "Uncategorized",
       threshold: Number(row.min_stock ?? 0),
       unitsPerBox: latestPerBox.get(row.id) ?? 0,

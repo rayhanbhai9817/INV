@@ -8,9 +8,10 @@
 -- 1. categories
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS categories (
-  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name       text NOT NULL UNIQUE,
-  created_at timestamptz DEFAULT now()
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        text NOT NULL UNIQUE,
+  description text,
+  created_at  timestamptz DEFAULT now()
 );
 
 -- ---------------------------------------------------------------------
@@ -36,6 +37,9 @@ CREATE TABLE IF NOT EXISTS products (
   supplier_id uuid REFERENCES suppliers(id),
   unit        text DEFAULT 'pcs',
   min_stock   integer DEFAULT 0,
+  description text,
+  -- Storage path inside the product-images bucket.
+  image_url   text,
   created_at  timestamptz DEFAULT now()
 );
 
@@ -91,6 +95,8 @@ CREATE TABLE IF NOT EXISTS product_prices (
   total_price  numeric(12,2) GENERATED ALWAYS AS (unit_price * unit) STORED,
   date         date DEFAULT CURRENT_DATE,
   note         text,
+  -- Storage path inside the product-images bucket.
+  image_url    text,
   created_at   timestamptz DEFAULT now()
 );
 

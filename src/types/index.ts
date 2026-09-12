@@ -5,6 +5,7 @@
 export interface Category {
   id: string;
   name: string;
+  description: string | null;
   created_at: string;
 }
 
@@ -25,6 +26,9 @@ export interface Product {
   supplier_id: string | null;
   unit: string;
   min_stock: number;
+  description: string | null;
+  /** Object path inside the private `product-images` bucket. */
+  image_url: string | null;
   created_at: string;
 }
 
@@ -90,6 +94,8 @@ export interface ProductPrice {
   total_price: number;
   date: string;
   note: string | null;
+  /** Object path inside the private `product-images` bucket. */
+  image_url: string | null;
   created_at: string;
 }
 

@@ -29,6 +29,8 @@ import {
   type ProductHistoryRow,
   type ProductInput,
 } from "@/lib/db/products";
+import { removeImage, signedImageUrls, uploadImage } from "@/lib/db/storage";
+import { ImageField, Thumb } from "@/components/ui/ImageField";
 import { errorMessage } from "@/lib/supabase";
 import { stockStatusLabel, type StockStatusLabel } from "@/lib/range";
 import { MobileCard, MobileCards } from "@/components/ui/DataCards";
@@ -44,6 +46,9 @@ interface FormState {
   name: string;
   category_id: string;
   low_stock_threshold_units: number;
+  description: string;
+  /** Stored object path of the image already on the record. */
+  image_url: string | null;
 }
 
 const blank: FormState = {
@@ -51,6 +56,8 @@ const blank: FormState = {
   name: "",
   category_id: "none",
   low_stock_threshold_units: 100,
+  description: "",
+  image_url: null,
 };
 
 const STATUS_CLASSES: Record<StockStatusLabel, string> = {
@@ -71,6 +78,7 @@ export default function ProductsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [form, setForm] = useState<FormState>(blank);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [viewing, setViewing] = useState<Product | null>(null);
@@ -81,14 +89,21 @@ export default function ProductsPage() {
   const categories = useAsync(() => allCategories(), []);
   const catalogue = useAsync(async () => {
     const rows = await allProducts();
-    const rollups = await getStockRollups(rows.map((row) => row.id));
-    return { rows, rollups };
+    const [rollups, images] = await Promise.all([
+      getStockRollups(rows.map((row) => row.id)),
+      // Images live in a private bucket, so stored paths are exchanged for
+      // short-lived signed URLs in one batched call.
+      signedImageUrls(rows.map((row) => row.image_url)),
+    ]);
+    return { rows, rollups, images };
   }, [reloadKey]);
 
   const products = useMemo(() => catalogue.data?.rows ?? [], [catalogue.data]);
   const rollups = catalogue.data?.rollups ?? {};
   const emptyRollup: ProductStockRollup = { boxes: 0, loose: 0, total: 0 };
   const rollupFor = (id: string) => rollups[id] ?? emptyRollup;
+  const images = catalogue.data?.images ?? {};
+  const imageFor = (product: Product) => (product.image_url ? (images[product.image_url] ?? null) : null);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -116,6 +131,7 @@ export default function ProductsPage() {
   function openCreate() {
     setEditing(null);
     setForm(blank);
+    setImageFile(null);
     setOpen(true);
   }
 
@@ -126,7 +142,10 @@ export default function ProductsPage() {
       name: product.name,
       category_id: product.category_id ?? "none",
       low_stock_threshold_units: product.min_stock ?? 100,
+      description: product.description ?? "",
+      image_url: product.image_url ?? null,
     });
+    setImageFile(null);
     setOpen(true);
   }
 
@@ -141,7 +160,13 @@ export default function ProductsPage() {
     }
 
     setSaving(true);
+    // The upload happens first so a storage failure never writes a row that
+    // points at a file which is not there.
+    let uploadedPath: string | null = null;
     try {
+      if (imageFile) uploadedPath = await uploadImage(imageFile);
+      const imagePath = uploadedPath ?? form.image_url;
+
       const payload: ProductInput = {
         name: form.name.trim(),
         sku: form.sku.trim() || null,
@@ -149,10 +174,16 @@ export default function ProductsPage() {
         supplier_id: editing?.supplier_id ?? null,
         unit: editing?.unit ?? "pcs",
         min_stock: form.low_stock_threshold_units,
+        description: form.description.trim() || null,
+        image_url: imagePath,
       };
 
       if (editing) {
         await updateProduct(editing.id, payload);
+        // The previous file is only dropped once the row no longer refers to it.
+        if (editing.image_url && editing.image_url !== imagePath) {
+          await removeImage(editing.image_url);
+        }
         toast.success("Product updated");
       } else {
         await createProduct(payload);
@@ -160,8 +191,11 @@ export default function ProductsPage() {
       }
 
       setOpen(false);
+      setImageFile(null);
       setReloadKey((key) => key + 1);
     } catch (caught) {
+      // A fresh upload that never made it onto a row would be orphaned.
+      if (uploadedPath) await removeImage(uploadedPath);
       toast.error(errorMessage(caught));
     } finally {
       setSaving(false);
@@ -173,6 +207,7 @@ export default function ProductsPage() {
     setRemoving(true);
     try {
       await deleteProduct(deleting.id);
+      await removeImage(deleting.image_url);
       toast.success("Product permanently deleted");
       setDeleting(null);
       setReloadKey((key) => key + 1);
@@ -340,7 +375,11 @@ export default function ProductsPage() {
                     key={product.id}
                     title={product.name}
                     subtitle={`${product.sku ?? "NO SKU"} · ${categoryName(product.category_id) ?? "Uncategorised"}`}
+                    badge={<Thumb url={imageFor(product)} alt={product.name} />}
                     fields={[
+                      ...(product.description
+                        ? [{ label: "Description", value: product.description, wide: true }]
+                        : []),
                       { label: "Total Units", value: formatNumber(rollup.total), tone: "text-[#4318ff]" },
                       { label: "Boxes", value: formatNumber(rollup.boxes) },
                       { label: "Loose Units", value: formatNumber(rollup.loose) },
@@ -411,9 +450,7 @@ export default function ProductsPage() {
                     >
                       <td className="px-4 py-4">
                         <div className="flex justify-center">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f4f7fe] text-[9px] font-black uppercase tracking-widest text-[#a3aed0] shadow-sm">
-                            N/A
-                          </div>
+                          <Thumb url={imageFor(product)} alt={product.name} />
                         </div>
                       </td>
                       <td className="px-4 py-4 font-mono text-[10px] font-bold tracking-tight text-[#a3aed0]">
@@ -430,7 +467,9 @@ export default function ProductsPage() {
                         )}
                       </td>
                       <td className="px-4 py-4">
-                        <p className="max-w-[200px] truncate text-xs text-[#a3aed0]">—</p>
+                        <p className="max-w-[200px] truncate text-xs text-[#a3aed0]">
+                          {product.description ?? "—"}
+                        </p>
                       </td>
                       <td className="px-4 py-4 text-right text-sm font-bold text-[#2b3674]">
                         {formatNumber(rollup.boxes)}
@@ -551,6 +590,25 @@ export default function ProductsPage() {
                 ))}
               </select>
             </Field>
+
+            <Field label="DESCRIPTION">
+              <textarea
+                value={form.description}
+                onChange={(event) => setForm({ ...form, description: event.target.value })}
+                maxLength={500}
+                rows={3}
+                placeholder="Short description (optional)"
+                className="w-full resize-none rounded-xl border border-[#f4f7fe] bg-[#f4f7fe] px-3 py-3 text-sm text-[#2b3674] outline-none placeholder:text-[#a3aed0] focus:ring-2 focus:ring-[#4318ff]/20"
+              />
+            </Field>
+
+            <ImageField
+              file={imageFile}
+              existingUrl={form.image_url ? (images[form.image_url] ?? null) : null}
+              busy={saving}
+              onSelect={setImageFile}
+              onClear={() => setForm({ ...form, image_url: null })}
+            />
           </div>
 
           <div className="flex justify-end gap-3">
@@ -635,6 +693,7 @@ export default function ProductsPage() {
       {viewing && (
         <ProductDetail
           product={viewing}
+          imageUrl={imageFor(viewing)}
           categoryName={categoryName(viewing.category_id)}
           rollup={rollupFor(viewing.id)}
           onClose={() => setViewing(null)}
@@ -646,11 +705,13 @@ export default function ProductsPage() {
 
 function ProductDetail({
   product,
+  imageUrl,
   categoryName,
   rollup,
   onClose,
 }: {
   product: Product;
+  imageUrl: string | null;
   categoryName: string | null;
   rollup: ProductStockRollup;
   onClose: () => void;
@@ -686,11 +747,7 @@ function ProductDetail({
   return (
     <Overlay onClose={onClose} width="max-w-4xl">
       <div className="flex items-center gap-4">
-        <div className="h-16 w-16 overflow-hidden rounded-2xl ring-1 ring-[#f4f7fe]">
-          <div className="flex h-full w-full items-center justify-center bg-[#f4f7fe] text-[9px] font-black uppercase tracking-widest text-[#a3aed0]">
-            N/A
-          </div>
-        </div>
+        <Thumb url={imageUrl} alt={product.name} size="h-16 w-16" />
         <div>
           <h2 className="text-2xl font-black text-[#2b3674]">{product.name}</h2>
           <div className="mt-1 flex items-center gap-2">

@@ -179,8 +179,11 @@ export interface DashboardBatch {
 }
 
 export async function getDashboardFeed(): Promise<DashboardFeed> {
-  const [inventoryRes, ledgerRes, batchesRes, categoriesRes] = await Promise.all([
+  const [inventoryRes, productsRes, ledgerRes, batchesRes, categoriesRes] = await Promise.all([
     supabase.from("inventory").select("*"),
+    // Category and supplier come from products, not the view: an install that
+    // ran the schema from the original specification has a view without them.
+    supabase.from("products").select("id,category_id,supplier_id,image_url,description"),
     supabase.from("ledger").select("id,product_id,type,qty,created_at,batch_id"),
     supabase
       .from("stock_batches")
@@ -189,12 +192,19 @@ export async function getDashboardFeed(): Promise<DashboardFeed> {
   ]);
 
   assertOk(inventoryRes.error);
+  assertOk(productsRes.error);
   assertOk(ledgerRes.error);
   assertOk(batchesRes.error);
   assertOk(categoriesRes.error);
 
   const categories = (categoriesRes.data ?? []) as Array<{ id: string; name: string }>;
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
+  const categoryByProduct = new Map(
+    ((productsRes.data ?? []) as Array<{ id: string; category_id: string | null }>).map((row) => [
+      row.id,
+      row.category_id,
+    ]),
+  );
   const batches = (batchesRes.data ?? []) as Array<DashboardBatch & { id: string }>;
 
   // Whole cartons still on hand, per product.
@@ -210,19 +220,22 @@ export async function getDashboardFeed(): Promise<DashboardFeed> {
   const batchById = new Map(batches.map((batch) => [batch.id, batch]));
 
   const products: DashboardProduct[] = ((inventoryRes.data ?? []) as InventoryRow[]).map(
-    (row) => ({
+    (row) => {
+      const categoryId = categoryByProduct.get(row.id) ?? row.category_id ?? null;
+      return {
       id: row.id,
       name: row.name,
       sku: row.sku,
       unit: row.unit,
-      category_id: row.category_id,
-      categoryName: row.category_id
-        ? (categoryNames.get(row.category_id) ?? "Uncategorized")
+      category_id: categoryId,
+      categoryName: categoryId
+        ? (categoryNames.get(categoryId) ?? "Uncategorized")
         : "Uncategorized",
       totalUnits: Number(row.current_stock ?? 0),
       threshold: Number(row.min_stock ?? 0),
       boxes: boxesByProduct.get(row.id) ?? 0,
-    }),
+      };
+    },
   );
 
   const movements: DashboardMovement[] = (

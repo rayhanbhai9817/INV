@@ -21,6 +21,9 @@ export interface ProductInput {
   supplier_id: string | null;
   unit: string;
   min_stock: number;
+  description: string | null;
+  /** Object path in the product-images bucket, or null for no image. */
+  image_url: string | null;
 }
 
 export async function listProducts(
@@ -61,9 +64,25 @@ export async function getProduct(id: string): Promise<ProductWithRelations> {
   return data as unknown as ProductWithRelations;
 }
 
+/**
+ * `description` / `image_url` arrived after the first release, so a project that
+ * has not run the migration yet gets told what to do rather than a raw
+ * PostgREST message.
+ */
+function describeWriteError(error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (message.includes("image_url") || message.includes("description")) {
+    throw new Error(
+      "This database does not have the products image_url / description columns yet. Run " +
+        "supabase/migrations/20260913_images_descriptions_and_view_fix.sql in the Supabase SQL Editor.",
+    );
+  }
+  throw error instanceof Error ? error : new Error(message);
+}
+
 export async function createProduct(input: ProductInput): Promise<Product> {
   const { data, error } = await supabase.from("products").insert(input).select("*").single();
-  assertOk(error);
+  if (error) describeWriteError(error);
   return data as Product;
 }
 
@@ -74,7 +93,7 @@ export async function updateProduct(id: string, input: ProductInput): Promise<Pr
     .eq("id", id)
     .select("*")
     .single();
-  assertOk(error);
+  if (error) describeWriteError(error);
   return data as Product;
 }
 

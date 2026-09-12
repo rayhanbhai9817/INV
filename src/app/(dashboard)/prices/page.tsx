@@ -15,6 +15,8 @@ import {
   updatePrice,
   type PriceInput,
 } from "@/lib/db/prices";
+import { removeImage, signedImageUrls, uploadImage } from "@/lib/db/storage";
+import { ImageField, Thumb } from "@/components/ui/ImageField";
 import { errorMessage } from "@/lib/supabase";
 import { MobileCard, MobileCards } from "@/components/ui/DataCards";
 import { cn, downloadCsv, formatMoney, formatNumber, todayISO, toCsv } from "@/lib/utils";
@@ -33,6 +35,8 @@ interface FormState {
   unit: string;
   date: string;
   note: string;
+  /** Stored object path of the image already on the record. */
+  image_url: string | null;
 }
 
 const blank: FormState = {
@@ -43,6 +47,7 @@ const blank: FormState = {
   unit: "",
   date: todayISO(),
   note: "",
+  image_url: null,
 };
 
 /** The product a row names, from the catalogue join or the typed name. */
@@ -68,6 +73,7 @@ export default function ProductPricePage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ProductPriceWithProduct | null>(null);
   const [form, setForm] = useState<FormState>(blank);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [removing, setRemoving] = useState<ProductPriceWithProduct | null>(null);
@@ -87,6 +93,15 @@ export default function ProductPricePage() {
   );
 
   const rows = useMemo(() => prices.data?.rows ?? [], [prices.data]);
+
+  // Images live in a private bucket, so the page's stored paths are exchanged
+  // for short-lived signed URLs in one batched call.
+  const images = useAsync(
+    () => signedImageUrls(rows.map((row) => row.image_url)),
+    [rows],
+  );
+  const imageFor = (row: { image_url: string | null }) =>
+    row.image_url ? ((images.data ?? {})[row.image_url] ?? null) : null;
   const total = prices.data?.count ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -111,6 +126,7 @@ export default function ProductPricePage() {
   function openCreate() {
     setEditing(null);
     setForm(blank);
+    setImageFile(null);
     setOpen(true);
   }
 
@@ -124,7 +140,9 @@ export default function ProductPricePage() {
       unit: String(row.unit),
       date: row.date,
       note: row.note ?? "",
+      image_url: row.image_url ?? null,
     });
+    setImageFile(null);
     setOpen(true);
   }
 
@@ -153,7 +171,13 @@ export default function ProductPricePage() {
     }
 
     setSaving(true);
+    // The upload happens first so a storage failure never writes a row that
+    // points at a file which is not there.
+    let uploadedPath: string | null = null;
     try {
+      if (imageFile) uploadedPath = await uploadImage(imageFile);
+      const imagePath = uploadedPath ?? form.image_url;
+
       const payload: PriceInput = {
         product_id: form.mode === "catalogue" ? form.product_id : null,
         product_name: form.mode === "manual" ? manualName.slice(0, 160) : null,
@@ -161,10 +185,15 @@ export default function ProductPricePage() {
         unit: quantity,
         date: form.date,
         note: form.note.trim() || null,
+        image_url: imagePath,
       };
 
       if (editing) {
         await updatePrice(editing.id, payload);
+        // The previous file is only dropped once the row no longer refers to it.
+        if (editing.image_url && editing.image_url !== imagePath) {
+          await removeImage(editing.image_url);
+        }
         toast.success("Price updated");
       } else {
         await createPrice(payload);
@@ -172,8 +201,11 @@ export default function ProductPricePage() {
       }
 
       setOpen(false);
+      setImageFile(null);
       setReloadKey((key) => key + 1);
     } catch (caught) {
+      // A fresh upload that never made it onto a row would be orphaned.
+      if (uploadedPath) await removeImage(uploadedPath);
       toast.error(errorMessage(caught));
     } finally {
       setSaving(false);
@@ -185,6 +217,7 @@ export default function ProductPricePage() {
     setDeleting(true);
     try {
       await deletePrice(removing.id);
+      await removeImage(removing.image_url);
       toast.success("Price entry deleted");
       setRemoving(null);
       setReloadKey((key) => key + 1);
@@ -346,6 +379,7 @@ export default function ProductPricePage() {
                   key={row.id}
                   title={displayName(row)}
                   subtitle={displaySku(row)}
+                  badge={<Thumb url={imageFor(row)} alt={displayName(row)} />}
                   fields={[
                     { label: "Total Price", value: formatMoney(row.total_price, settings.currency), tone: "text-[#4318ff]" },
                     { label: "Unit Price", value: formatMoney(row.unit_price, settings.currency) },
@@ -378,6 +412,7 @@ export default function ProductPricePage() {
               <thead>
                 <tr className="border-b border-[#f4f7fe]">
                   <Th>Date</Th>
+                  <Th align="center">Img</Th>
                   <Th>Product</Th>
                   <Th align="right">Unit Price</Th>
                   <Th align="right">Unit</Th>
@@ -394,6 +429,11 @@ export default function ProductPricePage() {
                   >
                     <td className="whitespace-nowrap px-4 py-4 text-[10px] font-bold text-[#a3aed0]">
                       {row.date}
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex justify-center">
+                        <Thumb url={imageFor(row)} alt={displayName(row)} />
+                      </div>
                     </td>
                     <td className="px-4 py-4">
                       <div className="mb-1 max-w-[220px] truncate text-sm font-bold leading-none text-[#2b3674]">
@@ -587,6 +627,16 @@ export default function ProductPricePage() {
                 className={dialogFieldClass}
               />
             </div>
+
+            <div className="sm:col-span-2 lg:col-span-2">
+              <ImageField
+                file={imageFile}
+                existingUrl={form.image_url ? ((images.data ?? {})[form.image_url] ?? null) : null}
+                busy={saving}
+                onSelect={setImageFile}
+                onClear={() => setForm({ ...form, image_url: null })}
+              />
+            </div>
           </div>
 
           <div className="flex justify-end gap-3">
@@ -649,13 +699,14 @@ function Th({
   align = "left",
 }: {
   children: React.ReactNode;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
 }) {
   return (
     <th
       className={cn(
         "px-4 py-5 text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]",
         align === "right" && "text-right",
+        align === "center" && "text-center",
       )}
     >
       {children}

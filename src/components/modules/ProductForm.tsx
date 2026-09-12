@@ -57,6 +57,10 @@ export function ProductForm({
       supplier_id: supplierId || null,
       unit: unit || "pcs",
       min_stock: min,
+      // This form does not edit the description or image, so an edit keeps
+      // whatever the record already carries.
+      description: initial?.description ?? null,
+      image_url: initial?.image_url ?? null,
     });
   }
 

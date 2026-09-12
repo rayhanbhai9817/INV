@@ -32,24 +32,49 @@ export async function allCategories(): Promise<Category[]> {
   return (data ?? []) as Category[];
 }
 
-export async function createCategory(name: string): Promise<Category> {
+export interface CategoryInput {
+  name: string;
+  description: string | null;
+}
+
+/**
+ * `description` arrived after the first release, so a project that has not run
+ * the migration yet gets told what to do rather than a raw PostgREST message.
+ */
+function describeWriteError(error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (message.includes("description")) {
+    throw new Error(
+      "This database does not have the categories.description column yet. Run " +
+        "supabase/migrations/20260913_images_descriptions_and_view_fix.sql in the Supabase SQL Editor.",
+    );
+  }
+  throw error instanceof Error ? error : new Error(message);
+}
+
+function normalize(input: CategoryInput) {
+  const description = input.description?.trim();
+  return { name: input.name.trim(), description: description ? description : null };
+}
+
+export async function createCategory(input: CategoryInput): Promise<Category> {
   const { data, error } = await supabase
     .from("categories")
-    .insert({ name: name.trim() })
+    .insert(normalize(input))
     .select("*")
     .single();
-  assertOk(error);
+  if (error) describeWriteError(error);
   return data as Category;
 }
 
-export async function updateCategory(id: string, name: string): Promise<Category> {
+export async function updateCategory(id: string, input: CategoryInput): Promise<Category> {
   const { data, error } = await supabase
     .from("categories")
-    .update({ name: name.trim() })
+    .update(normalize(input))
     .eq("id", id)
     .select("*")
     .single();
-  assertOk(error);
+  if (error) describeWriteError(error);
   return data as Category;
 }
 
