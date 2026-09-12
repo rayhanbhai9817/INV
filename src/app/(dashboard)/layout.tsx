@@ -10,7 +10,6 @@ import {
   useNotificationsBadge,
 } from "@/components/providers/NotificationsProvider";
 import { SettingsProvider } from "@/components/providers/SettingsProvider";
-import { cn } from "@/lib/utils";
 
 /**
  * Client-side session guard. Supabase persists the session in the browser, so
@@ -28,7 +27,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-navy-700 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
   }
@@ -43,29 +42,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  /** Mobile drawer. */
   const [drawerOpen, setDrawerOpen] = useState(false);
-  /** Desktop rail. */
-  const [collapsed, setCollapsed] = useState(false);
   const { unreadCount } = useNotificationsBadge();
 
   return (
-    <div className="min-h-screen bg-canvas">
+    <div className="min-h-screen bg-background">
       <Sidebar
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        collapsed={collapsed}
-        onToggleCollapsed={() => setCollapsed((previous) => !previous)}
         unreadCount={unreadCount}
       />
-      <div
-        className={cn(
-          "transition-[padding] duration-200 ease-out",
-          collapsed ? "lg:pl-[76px]" : "lg:pl-[230px]",
-        )}
-      >
+      <div className="lg:pl-72">
         <Header onMenuClick={() => setDrawerOpen(true)} unreadCount={unreadCount} />
-        <main className="px-4 py-6 sm:px-6 lg:px-7">{children}</main>
+        <main className="min-h-[calc(100vh-64px)] p-4 lg:p-8">{children}</main>
       </div>
     </div>
   );

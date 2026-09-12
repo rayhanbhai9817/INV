@@ -1,5 +1,9 @@
 import type { Config } from "tailwindcss";
 
+/**
+ * Palette and radii mirror the reference design system one-for-one, so a class
+ * written against the reference maps straight onto this project.
+ */
 const config: Config = {
   content: [
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
@@ -8,42 +12,47 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        /** Accent — warm orange. Used for primary actions and active states. */
-        brand: {
-          50: "#fff7ed",
-          100: "#ffedd5",
-          200: "#fed7aa",
-          300: "#fdba74",
-          400: "#fb923c",
-          500: "#f97316",
-          600: "#ea580c",
-          700: "#c2410c",
-          800: "#9a3412",
-          900: "#7c2d12",
+        background: "#f4f7fe",
+        foreground: "#2b3674",
+        card: "#ffffff",
+        line: "#e0e5f2",
+        mutedfg: "#a3aed0",
+
+        primary: {
+          DEFAULT: "#4318ff",
+          soft: "#b195ff",
         },
-        /** Sidebar surface. */
-        shell: {
-          900: "#111827",
-          800: "#1f2937",
-          700: "#374151",
+        success: "#05cd99",
+        warning: "#ffb547",
+        danger: "#ee5d50",
+
+        sidebar: {
+          DEFAULT: "#0b1437",
+          accent: "#1e293b",
         },
-        /** Deep navy used by the app shell and headings. */
+
+        /** Aliases kept so existing markup keeps compiling. */
+        canvas: "#f4f7fe",
         navy: {
-          950: "#0a1030",
-          900: "#0e1638",
-          800: "#151f4a",
-          700: "#1d2a63",
-          600: "#26357c",
-          500: "#3a4a96",
-          300: "#8f9cc9",
-          200: "#c2cae6",
+          950: "#0b1437",
+          900: "#0b1437",
+          800: "#2b3674",
+          700: "#2b3674",
+          600: "#4318ff",
+          500: "#707eae",
+          300: "#a3aed0",
+          200: "#e0e5f2",
         },
-        /** Page ground. */
-        canvas: "#f4f6fc",
+      },
+      borderRadius: {
+        sm: "calc(0.75rem - 4px)",
+        md: "calc(0.75rem - 2px)",
+        lg: "0.75rem",
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
-        serif: ["var(--font-serif)", "Georgia", "Cambria", "serif"],
+        sans: ['"Times New Roman"', "Times", "serif"],
+        serif: ['"Times New Roman"', "Times", "serif"],
+        mono: ['"Times New Roman"', "Times", "serif"],
       },
       keyframes: {
         "fade-in": {

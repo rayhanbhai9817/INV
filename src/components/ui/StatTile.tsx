@@ -5,18 +5,18 @@ import { cn } from "@/lib/utils";
 export type TileTone = "indigo" | "green" | "red" | "amber" | "navy";
 
 const ICON_TONES: Record<TileTone, string> = {
-  indigo: "bg-indigo-50 text-indigo-500",
-  green: "bg-emerald-50 text-emerald-500",
-  red: "bg-rose-50 text-rose-500",
-  amber: "bg-amber-50 text-amber-500",
+  indigo: "bg-primary/10 text-primary",
+  green: "bg-success/10 text-success",
+  red: "bg-danger/10 text-danger",
+  amber: "bg-warning/10 text-warning",
   navy: "bg-navy-900/5 text-navy-700",
 };
 
 const VALUE_TONES: Record<TileTone, string> = {
   indigo: "text-navy-800",
-  green: "text-emerald-600",
-  red: "text-rose-600",
-  amber: "text-amber-600",
+  green: "text-success",
+  red: "text-danger",
+  amber: "text-warning",
   navy: "text-navy-800",
 };
 
@@ -102,7 +102,7 @@ export function StatTile({
         {href && (
           <Link
             href={href}
-            className="mt-1.5 inline-block text-[11px] font-medium text-navy-500 transition hover:text-indigo-600"
+            className="mt-1.5 inline-block text-[11px] font-medium text-navy-500 transition hover:text-primary"
           >
             View all →
           </Link>

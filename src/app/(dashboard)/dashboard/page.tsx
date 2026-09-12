@@ -154,7 +154,7 @@ export default function DashboardPage() {
           <div className="grid gap-5 lg:grid-cols-2">
             <Panel className="flex flex-col justify-center py-6">
               <h3 className="font-serif text-xl font-bold text-navy-800">Today Summary</h3>
-              <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-500">
+              <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
                 {longDate(todayISO())}
               </p>
             </Panel>
@@ -162,14 +162,14 @@ export default function DashboardPage() {
             <Panel className="grid grid-cols-2 gap-4 py-6">
               <div>
                 <TileLabel>Stock In</TileLabel>
-                <p className="mt-2 font-serif text-2xl font-bold text-emerald-600">
+                <p className="mt-2 font-serif text-2xl font-bold text-success">
                   {formatNumber(data.stockInToday)}{" "}
                   <span className="text-sm font-semibold">Units</span>
                 </p>
               </div>
               <div>
                 <TileLabel>Stock Out</TileLabel>
-                <p className="mt-2 font-serif text-2xl font-bold text-rose-600">
+                <p className="mt-2 font-serif text-2xl font-bold text-danger">
                   {formatNumber(data.stockOutToday)}{" "}
                   <span className="text-sm font-semibold">Units</span>
                 </p>
@@ -181,7 +181,7 @@ export default function DashboardPage() {
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
             <Panel className="relative overflow-hidden">
               <div className="flex items-center gap-2.5">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 text-indigo-500">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <ClipboardList size={15} />
                 </span>
                 <TileLabel>Period Stock Summary</TileLabel>
@@ -199,7 +199,7 @@ export default function DashboardPage() {
                   <p
                     className={cn(
                       "mt-1.5 font-serif text-[22px] font-bold",
-                      (periodStats.data?.netFlow ?? 0) < 0 ? "text-rose-600" : "text-emerald-600",
+                      (periodStats.data?.netFlow ?? 0) < 0 ? "text-danger" : "text-success",
                     )}
                   >
                     {periodStats.data
@@ -219,7 +219,7 @@ export default function DashboardPage() {
 
             <Panel>
               <div className="flex items-center gap-2.5">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-success/10 text-success">
                   <TrendingUp size={15} />
                 </span>
                 <TileLabel>Stock In (Total)</TileLabel>
@@ -238,7 +238,7 @@ export default function DashboardPage() {
 
             <Panel>
               <div className="flex items-center gap-2.5">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-50 text-rose-500">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-danger/10 text-danger">
                   <TrendingDown size={15} />
                 </span>
                 <TileLabel>Stock Out (Total)</TileLabel>
@@ -250,7 +250,7 @@ export default function DashboardPage() {
               <div className="mt-4 border-t border-navy-200/50 pt-3">
                 <TileLabel>Issues Today</TileLabel>
                 <p className="mt-1 text-[11px] font-semibold text-navy-500">
-                  <span className="text-rose-600">{formatNumber(data.stockOutOrdersToday)}</span>{" "}
+                  <span className="text-danger">{formatNumber(data.stockOutOrdersToday)}</span>{" "}
                   Transactions
                 </p>
               </div>
@@ -259,7 +259,7 @@ export default function DashboardPage() {
             <Panel>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-amber-500">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-warning/10 text-warning">
                     <AlertTriangle size={15} />
                   </span>
                   <TileLabel>Inventory Health</TileLabel>
@@ -275,7 +275,7 @@ export default function DashboardPage() {
               <div className="mt-4 border-t border-navy-200/50 pt-3">
                 <TileLabel>Low Stock Alerts</TileLabel>
                 <p className="mt-1 text-[11px] font-semibold text-navy-500">
-                  <span className="text-amber-600">{formatNumber(data.lowStockCount)} Products</span>{" "}
+                  <span className="text-warning">{formatNumber(data.lowStockCount)} Products</span>{" "}
                   Below Min
                 </p>
               </div>
@@ -362,13 +362,13 @@ function HealthDial({ percent }: { percent: number }) {
   return (
     <span className="relative flex h-11 w-11 items-center justify-center">
       <svg viewBox="0 0 40 40" className="h-11 w-11 -rotate-90">
-        <circle cx="20" cy="20" r={radius} fill="none" stroke="#eef1f8" strokeWidth="4" />
+        <circle cx="20" cy="20" r={radius} fill="none" stroke="#e0e5f2" strokeWidth="4" />
         <circle
           cx="20"
           cy="20"
           r={radius}
           fill="none"
-          stroke="#4f46e5"
+          stroke="#4318ff"
           strokeWidth="4"
           strokeLinecap="round"
           strokeDasharray={`${dash} ${circumference}`}

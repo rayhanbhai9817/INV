@@ -69,7 +69,7 @@ export default function DailyActivityPage() {
         <h2 className="font-serif text-[30px] font-bold leading-tight tracking-tight text-navy-800">
           {window === "today" ? "Today Activity" : `${heading} Activity`}
         </h2>
-        <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-500">
+        <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
           {longDate(new Date().toISOString().slice(0, 10))}
         </p>
       </Panel>
@@ -90,7 +90,7 @@ export default function DailyActivityPage() {
                 setPage(1);
               }}
               placeholder="Search by Product, SKU, Action…"
-              className="w-full rounded-xl bg-canvas py-3 pl-10 pr-3 text-sm text-navy-800 outline-none transition placeholder:text-navy-300 focus:ring-2 focus:ring-indigo-100"
+              className="w-full rounded-xl bg-canvas py-3 pl-10 pr-3 text-sm text-navy-800 outline-none transition placeholder:text-navy-300 focus:ring-2 focus:ring-primary/20"
             />
           </div>
 
@@ -129,8 +129,8 @@ export default function DailyActivityPage() {
                   className={cn(
                     "w-[74px] shrink-0 rounded-full px-2.5 py-1 text-center text-[10px] font-bold uppercase tracking-[0.1em]",
                     row.type === "IN"
-                      ? "bg-emerald-50 text-emerald-600"
-                      : "bg-rose-50 text-rose-600",
+                      ? "bg-success/10 text-success"
+                      : "bg-danger/10 text-danger",
                   )}
                 >
                   {row.type === "IN" ? "Stock In" : "Stock Out"}
@@ -150,7 +150,7 @@ export default function DailyActivityPage() {
                 <p
                   className={cn(
                     "shrink-0 font-serif text-sm font-bold tabular-nums",
-                    row.type === "IN" ? "text-emerald-600" : "text-rose-600",
+                    row.type === "IN" ? "text-success" : "text-danger",
                   )}
                 >
                   {row.type === "IN" ? "+" : "−"}
@@ -211,7 +211,7 @@ function SelectPill({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="appearance-none rounded-xl bg-canvas py-3 pl-4 pr-10 text-xs font-medium text-navy-700 outline-none transition focus:ring-2 focus:ring-indigo-100"
+        className="appearance-none rounded-xl bg-canvas py-3 pl-4 pr-10 text-xs font-medium text-navy-700 outline-none transition focus:ring-2 focus:ring-primary/20"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

@@ -135,7 +135,7 @@ export default function ProductsPage() {
           </button>
           <Link
             href="/products/new"
-            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-[13px] font-bold text-white shadow-sm shadow-indigo-600/25 transition hover:bg-indigo-700"
+            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-[13px] font-bold text-white shadow-sm shadow-primary/25 transition hover:bg-primary"
           >
             <Plus size={15} />
             Add Product
@@ -178,7 +178,7 @@ export default function ProductsPage() {
                 setPage(1);
               }}
               placeholder="Filter by name or SKU"
-              className="w-full rounded-xl bg-canvas py-3 pl-10 pr-3 text-sm text-navy-800 outline-none transition placeholder:text-navy-300 focus:ring-2 focus:ring-indigo-100"
+              className="w-full rounded-xl bg-canvas py-3 pl-10 pr-3 text-sm text-navy-800 outline-none transition placeholder:text-navy-300 focus:ring-2 focus:ring-primary/20"
             />
           </div>
 
@@ -253,7 +253,7 @@ export default function ProductsPage() {
                       <td className="px-4 py-4">
                         <Link
                           href={`/products/${product.id}`}
-                          className="font-serif text-[13.5px] font-bold text-navy-800 transition hover:text-indigo-600"
+                          className="font-serif text-[13.5px] font-bold text-navy-800 transition hover:text-primary"
                         >
                           {product.name}
                         </Link>
@@ -268,7 +268,7 @@ export default function ProductsPage() {
                       <td className="px-4 py-4 text-right font-serif text-[13px] font-bold tabular-nums text-navy-500">
                         {formatNumber(rollup.loose)}
                       </td>
-                      <td className="px-4 py-4 text-right font-serif text-[13px] font-bold tabular-nums text-indigo-600">
+                      <td className="px-4 py-4 text-right font-serif text-[13px] font-bold tabular-nums text-primary">
                         {formatNumber(rollup.total)}
                       </td>
                       <td className="px-5 py-4">
@@ -366,7 +366,7 @@ function RowAction({
       className={cn(
         "rounded-lg p-2 transition",
         tone === "danger"
-          ? "text-rose-400 hover:bg-rose-50 hover:text-rose-600"
+          ? "text-danger hover:bg-danger/10 hover:text-danger"
           : "text-navy-300 hover:bg-canvas hover:text-navy-700",
       )}
     >
@@ -390,7 +390,7 @@ function SelectPill({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="appearance-none rounded-xl bg-canvas py-3 pl-4 pr-10 text-xs font-medium text-navy-700 outline-none transition focus:ring-2 focus:ring-indigo-100"
+        className="appearance-none rounded-xl bg-canvas py-3 pl-4 pr-10 text-xs font-medium text-navy-700 outline-none transition focus:ring-2 focus:ring-primary/20"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
