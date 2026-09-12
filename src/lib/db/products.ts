@@ -142,3 +142,56 @@ export async function getStockRollups(
   // Loose units can add up to whole boxes once batches are combined.
   return rollups;
 }
+
+/** One row of a product's transaction history, newest first. */
+export interface ProductHistoryRow {
+  id: string;
+  occurred_at: string;
+  type: "IN" | "OUT";
+  qty: number;
+  reference: string | null;
+}
+
+export async function getProductHistory(
+  productId: string,
+  limit = 50,
+): Promise<ProductHistoryRow[]> {
+  const { data, error } = await supabase
+    .from("ledger")
+    .select("id,created_at,type,qty,reference")
+    .eq("product_id", productId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  assertOk(error);
+
+  return ((data ?? []) as Array<{
+    id: string;
+    created_at: string;
+    type: "IN" | "OUT";
+    qty: number;
+    reference: string | null;
+  }>).map((row) => ({
+    id: row.id,
+    occurred_at: row.created_at,
+    type: row.type,
+    qty: Number(row.qty ?? 0),
+    reference: row.reference,
+  }));
+}
+
+/**
+ * Units per box for a product, taken from its most recent batch. The schema
+ * stores packaging per batch rather than on the product itself.
+ */
+export async function getPackaging(productId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from("stock_batches")
+    .select("qty_per_box")
+    .eq("product_id", productId)
+    .order("batch_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  assertOk(error);
+  return data ? Number(data.qty_per_box) : null;
+}
