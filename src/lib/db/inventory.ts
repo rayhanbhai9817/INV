@@ -117,6 +117,10 @@ export interface ControlBatch {
   remainingBoxes: number;
   unitsPerBox: number;
   remainingUnits: number;
+  /** What this batch cost per unit; null when it was received without a cost. */
+  unitCost: number | null;
+  warehouseName: string | null;
+  supplierName: string | null;
   status: "ACTIVE" | "EMPTY";
 }
 
@@ -143,6 +147,10 @@ export interface ControlProduct {
   totalIn: number;
   dispatched: number;
   lastMovement: string | null;
+  /** Open stock priced at what each batch cost. */
+  stockValue: number;
+  /** Units on hand per warehouse, for the warehouse filter and breakdown. */
+  byWarehouse: Array<{ id: string; name: string; units: number }>;
   batches: ControlBatch[];
   history: ControlMovement[];
 }
@@ -160,7 +168,10 @@ export async function getInventoryControl(): Promise<ControlProduct[]> {
     supabase.from("categories").select("id,name"),
     supabase
       .from("stock_batches")
-      .select("id,product_id,batch_date,created_at,box_count,qty_per_box,remaining_qty")
+      .select(
+        "id,product_id,batch_date,created_at,box_count,qty_per_box,remaining_qty," +
+          "unit_cost,warehouse_id,supplier_id,warehouse:warehouses(id,name),supplier:suppliers(id,name)",
+      )
       .order("batch_date", { ascending: true })
       .order("created_at", { ascending: true }),
     supabase
@@ -192,18 +203,26 @@ export async function getInventoryControl(): Promise<ControlProduct[]> {
   const batchesByProduct = new Map<string, ControlBatch[]>();
   const boxesByProduct = new Map<string, number>();
   const latestPerBox = new Map<string, number>();
+  const valueByProduct = new Map<string, number>();
+  const warehousesByProduct = new Map<string, Map<string, { name: string; units: number }>>();
 
-  for (const batch of (batchesRes.data ?? []) as Array<{
+  for (const batch of (batchesRes.data ?? []) as unknown as Array<{
     id: string;
     product_id: string;
     batch_date: string;
     box_count: number;
     qty_per_box: number;
     remaining_qty: number;
+    unit_cost: number | null;
+    warehouse_id: string | null;
+    warehouse: { id: string; name: string } | null;
+    supplier: { id: string; name: string } | null;
   }>) {
     const perBox = Number(batch.qty_per_box ?? 0);
     const remaining = Number(batch.remaining_qty ?? 0);
     const remainingBoxes = perBox > 0 ? Math.floor(remaining / perBox) : 0;
+    const unitCost =
+      batch.unit_cost === null || batch.unit_cost === undefined ? null : Number(batch.unit_cost);
 
     const list = batchesByProduct.get(batch.product_id) ?? [];
     list.push({
@@ -213,12 +232,35 @@ export async function getInventoryControl(): Promise<ControlProduct[]> {
       remainingBoxes,
       unitsPerBox: perBox,
       remainingUnits: remaining,
+      unitCost,
+      warehouseName: batch.warehouse?.name ?? null,
+      supplierName: batch.supplier?.name ?? null,
       status: remaining === 0 ? "EMPTY" : "ACTIVE",
     });
     batchesByProduct.set(batch.product_id, list);
 
     boxesByProduct.set(batch.product_id, (boxesByProduct.get(batch.product_id) ?? 0) + remainingBoxes);
     if (perBox > 0) latestPerBox.set(batch.product_id, perBox);
+
+    // Only open stock has a value and a location worth reporting.
+    if (remaining > 0) {
+      if (unitCost !== null) {
+        valueByProduct.set(
+          batch.product_id,
+          (valueByProduct.get(batch.product_id) ?? 0) + remaining * unitCost,
+        );
+      }
+      if (batch.warehouse_id) {
+        const perWarehouse = warehousesByProduct.get(batch.product_id) ?? new Map();
+        const entry = perWarehouse.get(batch.warehouse_id) ?? {
+          name: batch.warehouse?.name ?? "Unnamed warehouse",
+          units: 0,
+        };
+        entry.units += remaining;
+        perWarehouse.set(batch.warehouse_id, entry);
+        warehousesByProduct.set(batch.product_id, perWarehouse);
+      }
+    }
   }
 
   const historyByProduct = new Map<string, ControlMovement[]>();
@@ -271,6 +313,10 @@ export async function getInventoryControl(): Promise<ControlProduct[]> {
       totalIn: running.in,
       dispatched: running.out,
       lastMovement: running.last,
+      stockValue: valueByProduct.get(row.id) ?? 0,
+      byWarehouse: Array.from(warehousesByProduct.get(row.id) ?? new Map()).map(
+        ([id, entry]) => ({ id, name: entry.name, units: entry.units }),
+      ),
       batches: (batchesByProduct.get(row.id) ?? []).slice().reverse(),
       history: (historyByProduct.get(row.id) ?? []).slice().reverse(),
     };

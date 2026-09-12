@@ -4,10 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useToast } from "@/components/ui/Toast";
 import { useNotificationsBadge } from "@/components/providers/NotificationsProvider";
+import { useSettings } from "@/components/providers/SettingsProvider";
 import { useAsync } from "@/lib/hooks";
 import { getMovementProducts, recordStockIn, recordStockOut } from "@/lib/db/stock";
+import { allSuppliers } from "@/lib/db/suppliers";
+import { allWarehouses, defaultWarehouseId } from "@/lib/db/warehouses";
 import { errorMessage } from "@/lib/supabase";
-import { cn, formatNumber } from "@/lib/utils";
+import { cn, formatMoney, formatNumber } from "@/lib/utils";
 
 type Mode = "STOCK_IN" | "STOCK_OUT";
 
@@ -24,12 +27,34 @@ function composeReference(reason: string, origin: string, notes: string): string
 export function StockMovementForm({ mode }: { mode: Mode }) {
   const toast = useToast();
   const { refresh: refreshBadge } = useNotificationsBadge();
+  const { settings } = useSettings();
 
   const [reloadKey, setReloadKey] = useState(0);
-  const catalogue = useAsync(() => getMovementProducts(), [reloadKey]);
+  const [warehouseId, setWarehouseId] = useState("");
+
+  const warehouses = useAsync(() => allWarehouses(), []);
+  const suppliers = useAsync(
+    () => (mode === "STOCK_IN" ? allSuppliers() : Promise.resolve([])),
+    [mode],
+  );
+
+  // Stock on hand is per warehouse, so the catalogue reloads when it changes.
+  const catalogue = useAsync(
+    () => getMovementProducts(warehouseId || null),
+    [reloadKey, warehouseId],
+  );
   const products = useMemo(() => catalogue.data ?? [], [catalogue.data]);
 
+  // Start on the default warehouse once the list arrives.
+  useEffect(() => {
+    if (warehouseId || !warehouses.data?.length) return;
+    setWarehouseId(defaultWarehouseId(warehouses.data));
+  }, [warehouses.data, warehouseId]);
+
   const [productId, setProductId] = useState("");
+  const [supplierId, setSupplierId] = useState("");
+  const [unitCost, setUnitCost] = useState("");
+  const [unitPrice, setUnitPrice] = useState("");
   const [boxes, setBoxes] = useState("");
   const [outUnits, setOutUnits] = useState("");
   const [reason, setReason] = useState(REASONS[mode][0] ?? "");
@@ -50,13 +75,18 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
     setOutUnits("");
     setNotes("");
     setDestination("");
+    setUnitPrice("");
 
     if (!productId) {
       setManualUnitsPerBox("");
-    } else {
-      const selected = products.find((item) => item.id === productId);
-      setManualUnitsPerBox(selected ? String(selected.unitsPerBox ?? 0) : "0");
+      setUnitCost("");
+      return;
     }
+
+    const selected = products.find((item) => item.id === productId);
+    setManualUnitsPerBox(selected ? String(selected.unitsPerBox ?? 0) : "0");
+    // Last purchase cost is a starting point, not a commitment — it stays editable.
+    setUnitCost(selected?.lastUnitCost != null ? String(selected.lastUnitCost) : "");
   }, [productId, products]);
 
   const product = useMemo(
@@ -78,6 +108,17 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
   const currentUnits = product?.currentUnits ?? 0;
   const resulting = mode === "STOCK_IN" ? currentUnits + movementUnits : currentUnits - movementUnits;
 
+  const costPerUnit = Number(unitCost);
+  const pricePerUnit = Number(unitPrice);
+  const hasCost = unitCost.trim() !== "" && Number.isFinite(costPerUnit) && costPerUnit >= 0;
+  const hasPrice = unitPrice.trim() !== "" && Number.isFinite(pricePerUnit) && pricePerUnit >= 0;
+
+  const totalCost = hasCost ? costPerUnit * movementUnits : null;
+  const saleValue = hasPrice ? pricePerUnit * movementUnits : null;
+
+  const warehouseName =
+    (warehouses.data ?? []).find((item) => item.id === warehouseId)?.name ?? null;
+
   function handleSave() {
     if (!validate()) return;
     if (mode === "STOCK_OUT") {
@@ -97,7 +138,27 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
       return false;
     }
     if (mode === "STOCK_OUT" && movementUnits > currentUnits) {
-      toast.error("Not enough stock available for this movement");
+      toast.error(
+        warehouseName
+          ? `Not enough stock in ${warehouseName} for this movement`
+          : "Not enough stock available for this movement",
+      );
+      return false;
+    }
+    if (!warehouseId) {
+      toast.error(
+        (warehouses.data ?? []).length === 0
+          ? "Add a warehouse first — stock has to be held somewhere"
+          : "Select a warehouse",
+      );
+      return false;
+    }
+    if (unitCost.trim() !== "" && !hasCost) {
+      toast.error("Unit cost must be zero or more");
+      return false;
+    }
+    if (unitPrice.trim() !== "" && !hasPrice) {
+      toast.error("Unit price must be zero or more");
       return false;
     }
     if (!reason.trim()) {
@@ -122,12 +183,17 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
           qtyPerBox: unitsPerBox,
           batchDate: movementDate,
           reference,
+          unitCost: hasCost ? costPerUnit : null,
+          supplierId: supplierId || null,
+          warehouseId,
         });
       } else {
         await recordStockOut(product.id, movementUnits, {
           outDate: movementDate,
           note: reference,
           reference,
+          unitPrice: hasPrice ? pricePerUnit : null,
+          warehouseId,
         });
       }
 
@@ -139,6 +205,9 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
       setManualUnitsPerBox("");
       setNotes("");
       setDestination("");
+      setUnitCost("");
+      setUnitPrice("");
+      setSupplierId("");
       setReason(REASONS[mode][0] ?? "");
       setConfirming(false);
       setReloadKey((key) => key + 1);
@@ -164,6 +233,30 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
         </div>
 
         <div className="grid gap-6 p-8 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-2 sm:col-span-2 lg:col-span-3">
+            <label className={labelClass}>Warehouse</label>
+            <select
+              value={warehouseId}
+              onChange={(event) => setWarehouseId(event.target.value)}
+              className={fieldClass}
+            >
+              {(warehouses.data ?? []).length === 0 && (
+                <option value="">No warehouses yet — add one first</option>
+              )}
+              {(warehouses.data ?? []).map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                  {item.location ? ` · ${item.location}` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="ml-1 mt-1 text-[10px] font-bold text-[#a3aed0]">
+              {mode === "STOCK_IN"
+                ? "The received stock is held here."
+                : "Only this warehouse's stock can be issued."}
+            </p>
+          </div>
+
           <div className="space-y-2 sm:col-span-2 lg:col-span-3">
             <label className={labelClass}>Product</label>
             <select
@@ -214,6 +307,48 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
                   className="h-12 w-full cursor-not-allowed rounded-2xl border border-[#f4f7fe] bg-[#f4f7fe]/50 px-4 text-center font-black text-[#4318ff] outline-none"
                 />
               </div>
+
+              <div className="space-y-2">
+                <label className={labelClass}>Supplier</label>
+                <select
+                  value={supplierId}
+                  onChange={(event) => setSupplierId(event.target.value)}
+                  className={fieldClass}
+                >
+                  <option value="">Not recorded</option>
+                  {(suppliers.data ?? []).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className={labelClass}>Unit Cost</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={unitCost}
+                  onChange={(event) => setUnitCost(event.target.value)}
+                  placeholder="0.00"
+                  className={fieldClass}
+                />
+                <p className="ml-1 mt-1 text-[10px] font-bold text-[#a3aed0]">
+                  Leave blank if the cost is not known.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className={labelClass}>Total Cost (AUTO)</label>
+                <input
+                  readOnly
+                  tabIndex={-1}
+                  value={totalCost === null ? "—" : formatMoney(totalCost, settings.currency)}
+                  className="h-12 w-full cursor-not-allowed rounded-2xl border border-[#f4f7fe] bg-[#f4f7fe]/50 px-4 text-center font-black text-[#05cd99] outline-none"
+                />
+              </div>
             </>
           ) : (
             <div className="space-y-2 sm:col-span-3">
@@ -230,6 +365,36 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
                 Units will be deducted from your oldest stock batches first (FIFO).
               </p>
             </div>
+          )}
+
+          {mode === "STOCK_OUT" && (
+            <>
+              <div className="space-y-2">
+                <label className={labelClass}>Unit Price</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={unitPrice}
+                  onChange={(event) => setUnitPrice(event.target.value)}
+                  placeholder="0.00"
+                  className={fieldClass}
+                />
+                <p className="ml-1 mt-1 text-[10px] font-bold text-[#a3aed0]">
+                  Leave blank when this is not a sale.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className={labelClass}>Sale Value (AUTO)</label>
+                <input
+                  readOnly
+                  tabIndex={-1}
+                  value={saleValue === null ? "—" : formatMoney(saleValue, settings.currency)}
+                  className="h-12 w-full cursor-not-allowed rounded-2xl border border-[#f4f7fe] bg-[#f4f7fe]/50 px-4 text-center font-black text-[#05cd99] outline-none"
+                />
+              </div>
+            </>
           )}
 
           <div className="space-y-2 sm:col-span-1">
@@ -318,6 +483,37 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
                 </span>
               </div>
 
+              {warehouseName && (
+                <div className="flex items-end justify-between border-b border-[#f4f7fe] pb-4">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+                    Warehouse
+                  </span>
+                  <span className="text-sm font-bold text-[#2b3674]">{warehouseName}</span>
+                </div>
+              )}
+
+              {mode === "STOCK_IN" && totalCost !== null && (
+                <div className="flex items-end justify-between border-b border-[#f4f7fe] pb-4">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+                    Purchase Cost
+                  </span>
+                  <span className="text-sm font-black text-[#05cd99]">
+                    {formatMoney(totalCost, settings.currency)}
+                  </span>
+                </div>
+              )}
+
+              {mode === "STOCK_OUT" && saleValue !== null && (
+                <div className="flex items-end justify-between border-b border-[#f4f7fe] pb-4">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+                    Sale Value
+                  </span>
+                  <span className="text-sm font-black text-[#05cd99]">
+                    {formatMoney(saleValue, settings.currency)}
+                  </span>
+                </div>
+              )}
+
               <div className="mt-4 rounded-2xl border border-[#f4f7fe] bg-[#f4f7fe] p-6">
                 <div className="mb-4 flex items-end justify-between">
                   <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
@@ -351,9 +547,22 @@ export function StockMovementForm({ mode }: { mode: Mode }) {
               <span className="font-black text-[#ee5d50]">
                 {formatNumber(movementUnits)} units
               </span>{" "}
-              of <span className="font-bold text-[#2b3674]">{product.name}</span>? The oldest
-              batches are deducted first and a ledger entry is written for each batch touched.
-              This cannot be undone.
+              of <span className="font-bold text-[#2b3674]">{product.name}</span>
+              {warehouseName ? (
+                <>
+                  {" "}from <span className="font-bold text-[#2b3674]">{warehouseName}</span>
+                </>
+              ) : null}
+              {saleValue !== null ? (
+                <>
+                  {" "}for{" "}
+                  <span className="font-black text-[#05cd99]">
+                    {formatMoney(saleValue, settings.currency)}
+                  </span>
+                </>
+              ) : null}
+              ? The oldest batches in this warehouse are deducted first and a ledger entry is
+              written for each batch touched. This cannot be undone.
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button

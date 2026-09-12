@@ -35,6 +35,22 @@ export function sortBatchesForFifo(batches: StockBatch[]): StockBatch[] {
   });
 }
 
+/**
+ * Cost of the batches a plan would consume.
+ *
+ * Returns null when any consumed batch has no recorded cost — a partial total
+ * would read as a real figure and quietly understate what the stock cost.
+ */
+export function plannedCost(allocations: PlannedAllocation[]): number | null {
+  let total = 0;
+  for (const allocation of allocations) {
+    const unitCost = allocation.batch.unit_cost;
+    if (unitCost === null || unitCost === undefined) return null;
+    total += Number(unitCost) * allocation.deduct;
+  }
+  return total;
+}
+
 export function totalAvailable(batches: StockBatch[]): number {
   return batches.reduce((sum, batch) => sum + Math.max(0, batch.remaining_qty), 0);
 }

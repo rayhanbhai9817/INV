@@ -38,13 +38,26 @@ const MAX_BATCH_RETRIES = 5;
 // Reads
 // ---------------------------------------------------------------------------
 
-/** Open batches for a product, oldest first — the FIFO pick list. */
-export async function getOpenBatches(productId: string): Promise<StockBatch[]> {
-  const { data, error } = await supabase
+/**
+ * Open batches for a product, oldest first — the FIFO pick list.
+ *
+ * A warehouse narrows it to that warehouse's stock: goods sitting in another
+ * building cannot be handed over the counter here, so they must not be
+ * consumable from here either.
+ */
+export async function getOpenBatches(
+  productId: string,
+  warehouseId?: string | null,
+): Promise<StockBatch[]> {
+  let query = supabase
     .from("stock_batches")
     .select("*")
     .eq("product_id", productId)
-    .gt("remaining_qty", 0)
+    .gt("remaining_qty", 0);
+
+  if (warehouseId) query = query.eq("warehouse_id", warehouseId);
+
+  const { data, error } = await query
     .order("batch_date", { ascending: true })
     .order("created_at", { ascending: true });
 
@@ -52,14 +65,20 @@ export async function getOpenBatches(productId: string): Promise<StockBatch[]> {
   return (data ?? []) as StockBatch[];
 }
 
-/** Total units on hand for a product (sum of every open batch). */
-export async function getAvailableStock(productId: string): Promise<number> {
-  const { data, error } = await supabase
+/** Total units on hand for a product, optionally within one warehouse. */
+export async function getAvailableStock(
+  productId: string,
+  warehouseId?: string | null,
+): Promise<number> {
+  let query = supabase
     .from("stock_batches")
     .select("remaining_qty")
     .eq("product_id", productId)
     .gt("remaining_qty", 0);
 
+  if (warehouseId) query = query.eq("warehouse_id", warehouseId);
+
+  const { data, error } = await query;
   if (error) throw new Error(errorMessage(error));
   return (data ?? []).reduce((sum, row) => sum + Number(row.remaining_qty ?? 0), 0);
 }
@@ -74,6 +93,10 @@ export interface StockInInput {
   qtyPerBox: number;
   batchDate?: string;
   reference?: string | null;
+  /** Purchase cost per unit. Null records "cost unknown", not "free". */
+  unitCost?: number | null;
+  supplierId?: string | null;
+  warehouseId?: string | null;
 }
 
 export interface StockInResult {
@@ -97,6 +120,11 @@ export async function processStockIn(input: StockInInput): Promise<StockInResult
     throw new StockError("Qty per box must be a whole number greater than zero.");
   }
 
+  const unitCost = normalizeMoney(input.unitCost);
+  if (unitCost !== null && unitCost < 0) {
+    throw new StockError("Unit cost cannot be negative.");
+  }
+
   const totalQty = boxCount * qtyPerBox;
   const batchDate = input.batchDate || todayISO();
 
@@ -109,6 +137,9 @@ export async function processStockIn(input: StockInInput): Promise<StockInResult
       total_qty: totalQty,
       remaining_qty: totalQty,
       batch_date: batchDate,
+      unit_cost: unitCost,
+      supplier_id: input.supplierId ?? null,
+      warehouse_id: input.warehouseId ?? null,
     })
     .select("*")
     .single();
@@ -140,6 +171,32 @@ export interface StockOutOptions {
   outDate?: string;
   note?: string | null;
   reference?: string | null;
+  /** Selling price per unit. Null records "not a sale" rather than "free". */
+  unitPrice?: number | null;
+  /** Issue from this warehouse only; its batches are the only ones consumed. */
+  warehouseId?: string | null;
+}
+
+/** Money arrives from form inputs as strings; blanks must stay null. */
+function normalizeMoney(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : null;
+}
+
+/**
+ * Cost of the batches this issue actually consumed.
+ *
+ * Null when any consumed batch has no recorded cost: a partial sum would read
+ * as a real figure and overstate the profit on the sale.
+ */
+function costOfAllocations(allocations: FifoAllocation[]): number | null {
+  let total = 0;
+  for (const allocation of allocations) {
+    if (allocation.unit_cost === null) return null;
+    total += allocation.unit_cost * allocation.deducted;
+  }
+  return total;
 }
 
 /**
@@ -160,13 +217,19 @@ export async function processStockOut(
     throw new StockError("Quantity must be a whole number greater than zero.");
   }
 
-  const batches = await getOpenBatches(productId);
+  const unitPrice = normalizeMoney(options.unitPrice);
+  if (unitPrice !== null && unitPrice < 0) {
+    throw new StockError("Unit price cannot be negative.");
+  }
+
+  const warehouseId = options.warehouseId ?? null;
+  const batches = await getOpenBatches(productId, warehouseId);
   const plan = planFifoAllocations(batches, requested);
 
   if (plan.shortfall > 0) {
     throw new StockError(
-      `Not enough stock. Requested ${requested}, available ${plan.available}. ` +
-        `Short by ${plan.shortfall}.`,
+      `Not enough stock${warehouseId ? " in the selected warehouse" : ""}. ` +
+        `Requested ${requested}, available ${plan.available}. Short by ${plan.shortfall}.`,
     );
   }
 
@@ -203,6 +266,10 @@ export async function processStockOut(
     );
     if (ledgerError) throw new Error(errorMessage(ledgerError));
 
+    // Costed against the batches this issue actually drained, so the profit
+    // on it stays right even if those batches are corrected later.
+    const cogs = costOfAllocations(allocations);
+
     const { data: stockOut, error: stockOutError } = await supabase
       .from("stock_out")
       .insert({
@@ -210,13 +277,16 @@ export async function processStockOut(
         total_qty: requested,
         out_date: options.outDate || todayISO(),
         note: options.note ?? null,
+        unit_price: unitPrice,
+        cogs,
+        warehouse_id: warehouseId,
       })
       .select("id")
       .single();
 
     if (stockOutError || !stockOut) throw new Error(errorMessage(stockOutError));
 
-    return { stockOutId: stockOut.id as string, totalIssued: requested, allocations };
+    return { stockOutId: stockOut.id as string, totalIssued: requested, allocations, cogs };
   } catch (error) {
     await restoreAllocations(allocations);
     throw error;
@@ -256,6 +326,7 @@ async function deductFromBatch(
           batch_date: current.batch_date,
           deducted: deduct,
           remaining_after: remainingAfter,
+          unit_cost: current.unit_cost === null ? null : Number(current.unit_cost),
         },
       };
     }

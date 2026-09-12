@@ -159,6 +159,8 @@ export interface DashboardProduct {
   totalUnits: number;
   threshold: number;
   boxes: number;
+  /** Open stock priced at what each batch cost. */
+  stockValue: number;
 }
 
 export interface DashboardMovement {
@@ -234,6 +236,8 @@ export async function getDashboardFeed(): Promise<DashboardFeed> {
       totalUnits: Number(row.current_stock ?? 0),
       threshold: Number(row.min_stock ?? 0),
       boxes: boxesByProduct.get(row.id) ?? 0,
+      // Absent on a database that has not run the costing migration yet.
+      stockValue: Number(row.stock_value ?? 0),
       };
     },
   );

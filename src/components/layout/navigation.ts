@@ -12,6 +12,7 @@ import {
   TrendingDown,
   TrendingUp,
   Truck,
+  Warehouse,
   type LucideIcon,
 } from "lucide-react";
 
@@ -33,6 +34,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/stock-out", label: "Stock OUT", icon: TrendingDown },
   { href: "/categories", label: "Categories", icon: Tags },
   { href: "/suppliers", label: "Suppliers", icon: Truck },
+  { href: "/warehouses", label: "Warehouses", icon: Warehouse },
   { href: "/ledger", label: "Stock Ledger", icon: BookOpen },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/prices", label: "Product Price", icon: DollarSign },

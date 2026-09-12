@@ -5,12 +5,14 @@ import { useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronUp, Download, History, Inbox, Loader2, Package, Search } from "lucide-react";
 
 import { useAsync } from "@/lib/hooks";
+import { useSettings } from "@/components/providers/SettingsProvider";
 import { allCategories } from "@/lib/db/categories";
+import { allWarehouses } from "@/lib/db/warehouses";
 import { getInventoryControl, type ControlProduct } from "@/lib/db/inventory";
 import { stockStatusLabel, type StockStatusLabel } from "@/lib/range";
 import { MobileCard, MobileCards } from "@/components/ui/DataCards";
-import { cn, downloadCsv, formatNumber, toCsv } from "@/lib/utils";
-import type { Category } from "@/types";
+import { cn, downloadCsv, formatMoney, formatNumber, toCsv } from "@/lib/utils";
+import type { Category, Warehouse } from "@/types";
 
 const STATUS_CLASSES: Record<StockStatusLabel, string> = {
   "OUT OF STOCK": "bg-[#B60117]/5 text-[#B60117] border border-[#B60117]/10",
@@ -34,53 +36,81 @@ export default function InventoryPage() {
 
 function InventoryControlCenter() {
   const searchParams = useSearchParams();
+  const { settings } = useSettings();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
+  const [warehouse, setWarehouse] = useState("all");
   const [status, setStatus] = useState<string>(
     STATUS_FROM_QUERY[searchParams.get("status") ?? ""] ?? "all",
   );
 
   const categories = useAsync(() => allCategories(), []);
+  const warehouses = useAsync(() => allWarehouses().catch(() => [] as Warehouse[]), []);
   const control = useAsync(() => getInventoryControl(), []);
   const products = useMemo(() => control.data ?? [], [control.data]);
+
+  /** Units of a product held in the selected warehouse, or everywhere. */
+  const unitsIn = (product: ControlProduct) =>
+    warehouse === "all"
+      ? product.available
+      : (product.byWarehouse.find((entry) => entry.id === warehouse)?.units ?? 0);
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
     return products.filter((product) => {
       if (term && !`${product.name} ${product.sku ?? ""}`.toLowerCase().includes(term)) return false;
       if (category !== "all" && product.category_id !== category) return false;
+      // A warehouse filter hides products that hold nothing there at all.
+      if (warehouse !== "all" && !product.byWarehouse.some((entry) => entry.id === warehouse)) {
+        return false;
+      }
       if (status !== "all" && stockStatusLabel(product.available, product.threshold) !== status) {
         return false;
       }
       return true;
     });
-  }, [products, search, category, status]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, search, category, warehouse, status]);
 
   const stats = useMemo(
     () => ({
       products: rows.length,
       boxes: rows.reduce((sum, product) => sum + product.totalBoxes, 0),
-      units: rows.reduce((sum, product) => sum + product.available, 0),
+      units: rows.reduce((sum, product) => sum + unitsIn(product), 0),
+      value: rows.reduce((sum, product) => sum + product.stockValue, 0),
       low: rows.filter(
         (product) => stockStatusLabel(product.available, product.threshold) === "LOW STOCK",
       ).length,
       out: rows.filter((product) => product.available <= 0).length,
     }),
-    [rows],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, warehouse],
   );
 
   function exportCsv() {
     downloadCsv(
       "ozipco-inventory-full.csv",
       toCsv(
-        ["SKU", "Product", "Category", "Boxes", "Units/Box", "Total Units", "Status"],
+        [
+          "SKU",
+          "Product",
+          "Category",
+          "Warehouses",
+          "Boxes",
+          "Units/Box",
+          "Total Units",
+          "Stock Value",
+          "Status",
+        ],
         rows.map((product) => [
           product.sku ?? "",
           product.name,
           product.categoryName,
+          product.byWarehouse.map((entry) => `${entry.name} (${entry.units})`).join("; "),
           product.totalBoxes,
           product.unitsPerBox,
           product.available,
+          product.stockValue,
           stockStatusLabel(product.available, product.threshold),
         ]),
       ),
@@ -109,10 +139,15 @@ function InventoryControlCenter() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-6">
         <StatItem label="Total Products" value={formatNumber(stats.products)} />
         <StatItem label="Warehouse Boxes" value={formatNumber(stats.boxes)} />
         <StatItem label="Available Units" value={formatNumber(stats.units)} color="text-[#4318ff]" />
+        <StatItem
+          label="Stock Value"
+          value={formatMoney(stats.value, settings.currency)}
+          color="text-[#05cd99]"
+        />
         <StatItem label="Low Stock" value={formatNumber(stats.low)} color="text-[#ffb547]" />
         <StatItem label="Out of Stock" value={formatNumber(stats.out)} color="text-[#ee5d50]" />
       </div>
@@ -128,6 +163,18 @@ function InventoryControlCenter() {
               className="h-10 w-full rounded-xl border border-[#f4f7fe] bg-[#f4f7fe] pl-9 pr-3 text-xs text-[#2b3674] outline-none placeholder:text-[#a3aed0] focus:ring-2 focus:ring-[#4318ff]/20"
             />
           </div>
+          <select
+            value={warehouse}
+            onChange={(event) => setWarehouse(event.target.value)}
+            className="h-10 w-[160px] rounded-xl border-none bg-[#f4f7fe] px-3 text-xs text-[#2b3674] outline-none focus:ring-2 focus:ring-[#4318ff]/20"
+          >
+            <option value="all">All Warehouses</option>
+            {(warehouses.data ?? []).map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
           <select
             value={category}
             onChange={(event) => setCategory(event.target.value)}
@@ -245,6 +292,7 @@ function StatItem({
 }
 
 function MobileProductRow({ product }: { product: ControlProduct }) {
+  const { settings } = useSettings();
   const [open, setOpen] = useState(false);
   const status = stockStatusLabel(product.available, product.threshold);
 
@@ -328,6 +376,13 @@ function MobileProductRow({ product }: { product: ControlProduct }) {
                       </span>
                     </div>
                     <p className="mt-1 text-[9px] font-bold uppercase text-[#a3aed0]">
+                      {batch.warehouseName ?? "No warehouse"}
+                      {batch.supplierName ? ` · ${batch.supplierName}` : ""}
+                      {batch.unitCost !== null
+                        ? ` · ${formatMoney(batch.unitCost, settings.currency)}/unit`
+                        : ""}
+                    </p>
+                    <p className="mt-1 text-[9px] font-bold uppercase text-[#a3aed0]">
                       {batch.receivedAt} · {formatNumber(batch.remainingBoxes)}/
                       {formatNumber(batch.originalBoxes)} boxes ·{" "}
                       {formatNumber(batch.unitsPerBox)}/box
@@ -400,6 +455,7 @@ function MobileProductRow({ product }: { product: ControlProduct }) {
 }
 
 function ProductRow({ product }: { product: ControlProduct }) {
+  const { settings } = useSettings();
   const [open, setOpen] = useState(false);
   const status = stockStatusLabel(product.available, product.threshold);
 
@@ -567,6 +623,13 @@ function ProductRow({ product }: { product: ControlProduct }) {
                             </span>
                             <span className="font-black text-[#2b3674]">
                               BATCH #{batch.id.slice(0, 8).toUpperCase()}
+                            </span>
+                            <span className="text-[9px] font-bold uppercase text-[#a3aed0]">
+                              {batch.warehouseName ?? "No warehouse"}
+                              {batch.supplierName ? ` · ${batch.supplierName}` : ""}
+                              {batch.unitCost !== null
+                                ? ` · ${formatMoney(batch.unitCost, settings.currency)}/unit`
+                                : ""}
                             </span>
                           </div>
                           <div className="px-2 text-right">

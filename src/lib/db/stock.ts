@@ -26,12 +26,15 @@ import type {
   StockOutWithProduct,
 } from "@/types";
 
-const BATCH_SELECT = "*, product:products(id,name,sku,unit)";
-const OUT_SELECT = "*, product:products(id,name,sku,unit)";
+const BATCH_SELECT =
+  "*, product:products(id,name,sku,unit), supplier:suppliers(id,name), warehouse:warehouses(id,name)";
+const OUT_SELECT = "*, product:products(id,name,sku,unit), warehouse:warehouses(id,name)";
 
 export interface MovementFilters extends PageParams {
   search?: string;
   productId?: string;
+  supplierId?: string;
+  warehouseId?: string;
   dateFrom?: string;
   dateTo?: string;
 }
@@ -50,6 +53,8 @@ export async function listStockIn(
   let query = supabase.from("stock_batches").select(BATCH_SELECT, { count: "exact" });
 
   if (filters.productId) query = query.eq("product_id", filters.productId);
+  if (filters.supplierId) query = query.eq("supplier_id", filters.supplierId);
+  if (filters.warehouseId) query = query.eq("warehouse_id", filters.warehouseId);
   if (filters.dateFrom) query = query.gte("batch_date", filters.dateFrom);
   if (filters.dateTo) query = query.lte("batch_date", filters.dateTo);
   if (filters.search?.trim()) {
@@ -87,6 +92,7 @@ export async function listStockOut(
   let query = supabase.from("stock_out").select(OUT_SELECT, { count: "exact" });
 
   if (filters.productId) query = query.eq("product_id", filters.productId);
+  if (filters.warehouseId) query = query.eq("warehouse_id", filters.warehouseId);
   if (filters.dateFrom) query = query.gte("out_date", filters.dateFrom);
   if (filters.dateTo) query = query.lte("out_date", filters.dateTo);
   if (filters.search?.trim()) {
@@ -103,11 +109,14 @@ export async function listStockOut(
 }
 
 /** Open batches of a product, oldest first — shown as the FIFO preview. */
-export async function listBatchesForProduct(productId: string): Promise<StockBatchWithProduct[]> {
-  const { data, error } = await supabase
-    .from("stock_batches")
-    .select(BATCH_SELECT)
-    .eq("product_id", productId)
+export async function listBatchesForProduct(
+  productId: string,
+  warehouseId?: string | null,
+): Promise<StockBatchWithProduct[]> {
+  let query = supabase.from("stock_batches").select(BATCH_SELECT).eq("product_id", productId);
+  if (warehouseId) query = query.eq("warehouse_id", warehouseId);
+
+  const { data, error } = await query
     .order("batch_date", { ascending: true })
     .order("created_at", { ascending: true });
   assertOk(error);
@@ -130,20 +139,29 @@ export interface MovementProduct {
   id: string;
   name: string;
   sku: string | null;
+  /** Units on hand — in the selected warehouse when one is given. */
   currentUnits: number;
   unitsPerBox: number;
+  /** What this product cost per unit on its most recent receipt. */
+  lastUnitCost: number | null;
 }
 
 /**
- * Products for the Stock IN / Stock OUT form. Units-per-box comes from the
- * newest batch, since the schema stores packaging per batch.
+ * Products for the Stock IN / Stock OUT form.
+ *
+ * Units-per-box and last cost come from the newest batch, since the schema
+ * stores packaging and cost per batch. With a warehouse selected, the stock
+ * figure counts only that warehouse's batches — which is exactly what Stock
+ * OUT is allowed to consume from there.
  */
-export async function getMovementProducts(): Promise<MovementProduct[]> {
+export async function getMovementProducts(
+  warehouseId?: string | null,
+): Promise<MovementProduct[]> {
   const [inventoryRes, batchesRes] = await Promise.all([
     supabase.from("inventory").select("id,name,sku,current_stock").order("name"),
     supabase
       .from("stock_batches")
-      .select("product_id,qty_per_box,batch_date,created_at")
+      .select("product_id,qty_per_box,remaining_qty,warehouse_id,unit_cost,batch_date,created_at")
       .order("batch_date", { ascending: true })
       .order("created_at", { ascending: true }),
   ]);
@@ -151,13 +169,28 @@ export async function getMovementProducts(): Promise<MovementProduct[]> {
   assertOk(inventoryRes.error);
   assertOk(batchesRes.error);
 
-  const latestPerBox = new Map<string, number>();
-  for (const batch of (batchesRes.data ?? []) as Array<{
+  const batches = (batchesRes.data ?? []) as Array<{
     product_id: string;
     qty_per_box: number;
-  }>) {
+    remaining_qty: number;
+    warehouse_id: string | null;
+    unit_cost: number | null;
+  }>;
+
+  const latestPerBox = new Map<string, number>();
+  const latestCost = new Map<string, number | null>();
+  const unitsHere = new Map<string, number>();
+
+  for (const batch of batches) {
     const perBox = Number(batch.qty_per_box ?? 0);
     if (perBox > 0) latestPerBox.set(batch.product_id, perBox);
+    if (batch.unit_cost !== null && batch.unit_cost !== undefined) {
+      latestCost.set(batch.product_id, Number(batch.unit_cost));
+    }
+    if (warehouseId && batch.warehouse_id === warehouseId) {
+      const remaining = Math.max(0, Number(batch.remaining_qty ?? 0));
+      unitsHere.set(batch.product_id, (unitsHere.get(batch.product_id) ?? 0) + remaining);
+    }
   }
 
   return ((inventoryRes.data ?? []) as Array<{
@@ -169,7 +202,8 @@ export async function getMovementProducts(): Promise<MovementProduct[]> {
     id: row.id,
     name: row.name,
     sku: row.sku,
-    currentUnits: Number(row.current_stock ?? 0),
+    currentUnits: warehouseId ? (unitsHere.get(row.id) ?? 0) : Number(row.current_stock ?? 0),
     unitsPerBox: latestPerBox.get(row.id) ?? 0,
+    lastUnitCost: latestCost.get(row.id) ?? null,
   }));
 }

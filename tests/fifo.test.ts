@@ -10,6 +10,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  plannedCost,
   planFifoAllocations,
   sortBatchesForFifo,
   totalAvailable,
@@ -22,6 +23,7 @@ function batch(
   total_qty: number,
   remaining_qty: number,
   created_at = `${batch_date}T09:00:00.000Z`,
+  unit_cost: number | null = null,
 ): StockBatch {
   return {
     id,
@@ -31,6 +33,9 @@ function batch(
     total_qty,
     remaining_qty,
     batch_date,
+    unit_cost,
+    supplier_id: null,
+    warehouse_id: "warehouse-1",
     created_at,
   };
 }
@@ -163,4 +168,48 @@ test("issuing the entire stock in one go succeeds with no shortfall", () => {
   assert.equal(plan.shortfall, 0);
   assert.equal(plan.allocations.length, 3);
   assert.ok(plan.allocations.every((allocation) => allocation.remainingAfter === 0));
+});
+
+// --------------------------- costing the plan ------------------------------
+
+test("cost of a plan prices each batch at what that batch cost", () => {
+  const plan = planFifoAllocations(
+    [
+      batch("b1", "2026-01-01", 100, 100, "2026-01-01T09:00:00.000Z", 10),
+      batch("b2", "2026-02-01", 100, 100, "2026-02-01T09:00:00.000Z", 12),
+    ],
+    150,
+  );
+
+  // 100 units at 10 from the older batch, then 50 at 12 from the newer one.
+  assert.equal(plannedCost(plan.allocations), 100 * 10 + 50 * 12);
+});
+
+test("cost is unknown when any consumed batch has no cost recorded", () => {
+  const plan = planFifoAllocations(
+    [
+      batch("b1", "2026-01-01", 100, 100, "2026-01-01T09:00:00.000Z", null),
+      batch("b2", "2026-02-01", 100, 100, "2026-02-01T09:00:00.000Z", 12),
+    ],
+    150,
+  );
+
+  assert.equal(plannedCost(plan.allocations), null);
+});
+
+test("a batch with no cost outside the plan does not spoil the total", () => {
+  const plan = planFifoAllocations(
+    [
+      batch("b1", "2026-01-01", 100, 100, "2026-01-01T09:00:00.000Z", 10),
+      batch("b2", "2026-02-01", 100, 100, "2026-02-01T09:00:00.000Z", null),
+    ],
+    60,
+  );
+
+  // Only the first batch is touched, so the uncosted one is irrelevant.
+  assert.equal(plannedCost(plan.allocations), 600);
+});
+
+test("an empty plan costs nothing rather than reading as unknown", () => {
+  assert.equal(plannedCost([]), 0);
 });

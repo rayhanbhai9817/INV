@@ -27,6 +27,24 @@ CREATE TABLE IF NOT EXISTS suppliers (
 );
 
 -- ---------------------------------------------------------------------
+-- 2b. warehouses  (stock lives somewhere; exactly one is the default)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS warehouses (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       text NOT NULL UNIQUE,
+  location   text,
+  is_default boolean NOT NULL DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS warehouses_single_default
+  ON warehouses (is_default) WHERE is_default;
+
+INSERT INTO warehouses (name, location, is_default)
+SELECT 'Main Warehouse', NULL, true
+WHERE NOT EXISTS (SELECT 1 FROM warehouses);
+
+-- ---------------------------------------------------------------------
 -- 3. products
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS products (
@@ -54,6 +72,10 @@ CREATE TABLE IF NOT EXISTS stock_batches (
   total_qty     integer NOT NULL,
   remaining_qty integer NOT NULL,
   batch_date    date DEFAULT CURRENT_DATE,
+  -- What this batch cost per unit, who supplied it, and where it sits.
+  unit_cost     numeric(12,2) CHECK (unit_cost IS NULL OR unit_cost >= 0),
+  supplier_id   uuid REFERENCES suppliers(id),
+  warehouse_id  uuid REFERENCES warehouses(id),
   created_at    timestamptz DEFAULT now()
 );
 
@@ -66,6 +88,10 @@ CREATE TABLE IF NOT EXISTS stock_out (
   total_qty  integer NOT NULL,
   out_date   date DEFAULT CURRENT_DATE,
   note       text,
+  -- What it sold for, what the consumed batches cost, and where it left from.
+  unit_price   numeric(12,2) CHECK (unit_price IS NULL OR unit_price >= 0),
+  cogs         numeric(14,2),
+  warehouse_id uuid REFERENCES warehouses(id),
   created_at timestamptz DEFAULT now()
 );
 
@@ -126,12 +152,32 @@ CREATE OR REPLACE VIEW inventory AS
 SELECT p.id, p.name, p.sku, p.unit, p.min_stock,
        p.category_id, p.supplier_id,
        COALESCE(SUM(b.remaining_qty), 0)::integer AS current_stock,
+       COALESCE(SUM(b.remaining_qty * b.unit_cost), 0)::numeric(14,2) AS stock_value,
        CASE WHEN COALESCE(SUM(b.remaining_qty),0) = 0 THEN 'out_of_stock'
             WHEN COALESCE(SUM(b.remaining_qty),0) <= p.min_stock THEN 'low_stock'
             ELSE 'ok' END AS stock_status
 FROM products p
 LEFT JOIN stock_batches b ON b.product_id = p.id
 GROUP BY p.id;
+
+-- ---------------------------------------------------------------------
+-- 11. inventory_by_warehouse view (one row per product per warehouse)
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE VIEW inventory_by_warehouse AS
+SELECT b.product_id,
+       b.warehouse_id,
+       p.name  AS product_name,
+       p.sku,
+       p.unit,
+       p.min_stock,
+       w.name  AS warehouse_name,
+       COALESCE(SUM(b.remaining_qty), 0)::integer AS current_stock,
+       COALESCE(SUM(b.remaining_qty * b.unit_cost), 0)::numeric(14,2) AS stock_value
+FROM stock_batches b
+JOIN products   p ON p.id = b.product_id
+JOIN warehouses w ON w.id = b.warehouse_id
+WHERE b.remaining_qty > 0
+GROUP BY b.product_id, b.warehouse_id, p.name, p.sku, p.unit, p.min_stock, w.name;
 
 -- =====================================================================
 -- Indexes — keep FIFO reads and report filters fast
@@ -145,6 +191,11 @@ CREATE INDEX IF NOT EXISTS idx_batches_fifo           ON stock_batches(product_i
 CREATE INDEX IF NOT EXISTS idx_ledger_product         ON ledger(product_id);
 CREATE INDEX IF NOT EXISTS idx_ledger_created         ON ledger(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ledger_batch           ON ledger(batch_id);
+CREATE INDEX IF NOT EXISTS idx_batches_supplier       ON stock_batches(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_batches_warehouse      ON stock_batches(warehouse_id);
+CREATE INDEX IF NOT EXISTS idx_batches_fifo_warehouse ON stock_batches(product_id, warehouse_id, batch_date, created_at)
+  WHERE remaining_qty > 0;
+CREATE INDEX IF NOT EXISTS idx_stock_out_warehouse    ON stock_out(warehouse_id);
 CREATE INDEX IF NOT EXISTS idx_stock_out_product      ON stock_out(product_id);
 CREATE INDEX IF NOT EXISTS idx_stock_out_date         ON stock_out(out_date DESC);
 CREATE INDEX IF NOT EXISTS idx_prices_product         ON product_prices(product_id);
@@ -195,6 +246,7 @@ CREATE TRIGGER ledger_no_update BEFORE UPDATE OR DELETE ON ledger
 -- =====================================================================
 ALTER TABLE categories     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE warehouses     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_batches  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_out      ENABLE ROW LEVEL SECURITY;
@@ -206,7 +258,7 @@ ALTER TABLE settings       ENABLE ROW LEVEL SECURITY;
 DO $$
 DECLARE t text;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['categories','suppliers','products','stock_batches',
+  FOREACH t IN ARRAY ARRAY['categories','suppliers','warehouses','products','stock_batches',
                            'stock_out','ledger','product_prices','notifications','settings']
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I', t || '_authenticated_all', t);
@@ -217,6 +269,7 @@ BEGIN
 END $$;
 
 GRANT SELECT ON inventory TO authenticated;
+GRANT SELECT ON inventory_by_warehouse TO authenticated;
 
 -- =====================================================================
 -- Default settings rows

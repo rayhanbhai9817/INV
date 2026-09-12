@@ -26,6 +26,7 @@ import {
   Package,
   TrendingDown,
   TrendingUp,
+  Wallet,
   XCircle,
 } from "lucide-react";
 
@@ -34,7 +35,8 @@ import { useAsync } from "@/lib/hooks";
 import { getDashboardFeed, type DashboardProduct } from "@/lib/db/dashboard";
 import { rangeFor, rangeForMonth, stockStatusLabel } from "@/lib/range";
 import { MobileCard, MobileCards } from "@/components/ui/DataCards";
-import { cn, formatNumber } from "@/lib/utils";
+import { useSettings } from "@/components/providers/SettingsProvider";
+import { cn, formatMoney, formatNumber } from "@/lib/utils";
 
 const PIE_COLORS = ["#4318ff", "#6ad2ff", "#05cd99", "#ffb547", "#ee5d50"];
 
@@ -68,6 +70,7 @@ function dayLabel(value: string, grouped: boolean): string {
 }
 
 export default function DashboardPage() {
+  const { settings } = useSettings();
   const feed = useAsync(() => getDashboardFeed(), []);
 
   const [dateFilter, setDateFilter] = useState("today");
@@ -133,6 +136,7 @@ export default function DashboardPage() {
 
   const totalUnits = products.reduce((sum, product) => sum + product.totalUnits, 0);
   const totalBoxes = products.reduce((sum, product) => sum + product.boxes, 0);
+  const stockValue = products.reduce((sum, product) => sum + product.stockValue, 0);
 
   const lowStock = products.filter(
     (product) => stockStatusLabel(product.totalUnits, product.threshold) === "LOW STOCK",
@@ -365,6 +369,15 @@ export default function DashboardPage() {
       icon: Package,
       color: "text-[#4318ff]",
       bg: "bg-[#e0d9ff]",
+      link: "/inventory",
+    },
+    {
+      label: "Stock Value",
+      value: formatMoney(stockValue, settings.currency),
+      sub: "Priced at what each batch cost",
+      icon: Wallet,
+      color: "text-[#05cd99]",
+      bg: "bg-[#e6fff5]",
       link: "/inventory",
     },
     {

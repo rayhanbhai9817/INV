@@ -18,6 +18,15 @@ export interface Supplier {
   created_at: string;
 }
 
+export interface Warehouse {
+  id: string;
+  name: string;
+  location: string | null;
+  /** Pre-selected on the movement forms; exactly one row carries it. */
+  is_default: boolean;
+  created_at: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -46,11 +55,17 @@ export interface StockBatch {
   total_qty: number;
   remaining_qty: number;
   batch_date: string;
+  /** What one unit of this batch cost. Null for stock received before costing. */
+  unit_cost: number | null;
+  supplier_id: string | null;
+  warehouse_id: string | null;
   created_at: string;
 }
 
 export interface StockBatchWithProduct extends StockBatch {
   product: Pick<Product, "id" | "name" | "sku" | "unit"> | null;
+  supplier: Pick<Supplier, "id" | "name"> | null;
+  warehouse: Pick<Warehouse, "id" | "name"> | null;
 }
 
 export interface StockOut {
@@ -59,11 +74,20 @@ export interface StockOut {
   total_qty: number;
   out_date: string;
   note: string | null;
+  /** What one unit sold for. Null when the issue was not a sale. */
+  unit_price: number | null;
+  /**
+   * Cost of the exact batches FIFO consumed, fixed at the moment of issue so
+   * historic profit stays correct even if a batch is corrected later.
+   */
+  cogs: number | null;
+  warehouse_id: string | null;
   created_at: string;
 }
 
 export interface StockOutWithProduct extends StockOut {
   product: Pick<Product, "id" | "name" | "sku" | "unit"> | null;
+  warehouse: Pick<Warehouse, "id" | "name"> | null;
 }
 
 export type LedgerType = "IN" | "OUT";
@@ -135,7 +159,22 @@ export interface InventoryRow {
   category_id: string | null;
   supplier_id: string | null;
   current_stock: number;
+  /** Open stock priced at what each batch cost. */
+  stock_value: number;
   stock_status: StockStatus;
+}
+
+/** Row shape of the `inventory_by_warehouse` SQL view. */
+export interface InventoryByWarehouseRow {
+  product_id: string;
+  warehouse_id: string;
+  product_name: string;
+  sku: string | null;
+  unit: string;
+  min_stock: number;
+  warehouse_name: string;
+  current_stock: number;
+  stock_value: number;
 }
 
 // --------------------------- app-level shapes ------------------------------
@@ -190,10 +229,14 @@ export interface FifoAllocation {
   batch_date: string;
   deducted: number;
   remaining_after: number;
+  /** Unit cost of the batch this came out of, for the COGS sum. */
+  unit_cost: number | null;
 }
 
 export interface StockOutResult {
   stockOutId: string;
   totalIssued: number;
   allocations: FifoAllocation[];
+  /** Cost of the consumed batches; null when any of them had no cost. */
+  cogs: number | null;
 }
