@@ -27,3 +27,9 @@ export async function sendPasswordReset(email: string): Promise<void> {
   const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
   if (error) throw new Error(errorMessage(error));
 }
+
+/** Updates the signed-in operator's password. */
+export async function changePassword(password: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw new Error(errorMessage(error));
+}

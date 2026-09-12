@@ -1,184 +1,249 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import { Button } from "@/components/ui/Button";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Input } from "@/components/ui/Input";
-import { Select } from "@/components/ui/Select";
-import { ErrorState, Skeleton } from "@/components/ui/States";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
+
 import { useToast } from "@/components/ui/Toast";
-import { PageHeader } from "@/components/layout/PageHeader";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useSettings } from "@/components/providers/SettingsProvider";
-import { applyThresholdToProducts, saveSettings } from "@/lib/db/settings";
+import { changePassword } from "@/lib/db/auth";
+import { saveSettings } from "@/lib/db/settings";
 import { errorMessage } from "@/lib/supabase";
-import type { AppSettings } from "@/types";
 
-const CURRENCIES = ["USD", "EUR", "GBP", "CAD", "AUD", "BDT", "INR", "AED"];
-const PAGE_SIZES = ["10", "25", "50", "100"];
+const CURRENCIES = ["USD", "EUR", "GBP", "NGN", "KES", "ZAR", "INR", "AED"];
+const DATE_FORMATS = ["YYYY-MM-DD", "DD/MM/YYYY", "MM/DD/YYYY"];
 
 export default function SettingsPage() {
   const toast = useToast();
   const { user } = useAuth();
   const { settings, loading, refresh, applyLocal } = useSettings();
 
-  const [form, setForm] = useState<AppSettings>(settings);
+  const [name, setName] = useState("");
+  const [currency, setCurrency] = useState("USD");
+  const [dateFormat, setDateFormat] = useState("YYYY-MM-DD");
+  const [threshold, setThreshold] = useState("100");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [applyingThreshold, setApplyingThreshold] = useState(false);
-  const [confirmApply, setConfirmApply] = useState(false);
 
-  useEffect(() => setForm(settings), [settings]);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [updating, setUpdating] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
+  useEffect(() => {
+    setName(settings.company_name);
+    setCurrency(settings.currency);
+    setDateFormat(settings.date_format);
+    setThreshold(String(settings.low_stock_threshold));
+  }, [settings]);
 
-    if (!form.company_name.trim()) {
-      setError("Company name is required.");
-      return;
-    }
-    if (!Number.isInteger(form.low_stock_threshold) || form.low_stock_threshold < 0) {
-      setError("Low-stock threshold must be a whole number of 0 or more.");
-      return;
-    }
-
+  async function handleSaveSettings() {
     setSaving(true);
     try {
-      const saved = await saveSettings({ ...form, company_name: form.company_name.trim() });
+      const next = {
+        ...settings,
+        company_name: name.trim().slice(0, 120),
+        currency,
+        date_format: dateFormat,
+        low_stock_threshold: Math.max(0, Number(threshold) || 0),
+      };
+      const saved = await saveSettings(next);
       applyLocal(saved);
       await refresh();
-      toast.success("Settings saved.");
+      toast.success("Settings saved");
     } catch (caught) {
-      setError(errorMessage(caught));
+      toast.error(errorMessage(caught));
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleApplyThreshold() {
-    setApplyingThreshold(true);
+  async function handleChangePassword() {
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    setUpdating(true);
     try {
-      const updated = await applyThresholdToProducts(form.low_stock_threshold);
-      toast.success(
-        updated === 0
-          ? "Every product already has its own minimum set."
-          : `Applied to ${updated} product(s) that had no minimum.`,
-      );
-      setConfirmApply(false);
+      await changePassword(password);
+      setPassword("");
+      setConfirmPassword("");
+      toast.success("Password updated");
     } catch (caught) {
       toast.error(errorMessage(caught));
     } finally {
-      setApplyingThreshold(false);
+      setUpdating(false);
     }
   }
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
+      <div className="flex items-center justify-center gap-2 py-12 text-sm text-[#a3aed0]">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading…
       </div>
     );
   }
 
+  const labelClass = "ml-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]";
+  const fieldClass =
+    "h-11 w-full rounded-xl border border-[#f4f7fe] bg-[#f4f7fe] px-3 text-xs font-bold text-[#2b3674] outline-none focus:ring-2 focus:ring-[#4318ff]/20";
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <PageHeader
-        title="Settings"
-        description="Company details, stock thresholds and display preferences."
-      />
+    <div className="space-y-6">
+      <div className="flex flex-col justify-between gap-6 rounded-[20px] border border-[#f4f7fe] bg-white p-6 shadow-sm md:flex-row md:items-center">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-[#2b3674]">Preferences</h1>
+          <p className="text-sm font-medium text-[#a3aed0]">
+            System configurations and your personal account credentials.
+          </p>
+        </div>
+      </div>
 
-      <Card>
-        <CardHeader title="General" subtitle="Applied across the whole application" />
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
-          <Input
-            label="Company name"
-            value={form.company_name}
-            onChange={(event) => setForm({ ...form, company_name: event.target.value })}
-            required
-          />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="overflow-hidden rounded-[20px] bg-white shadow-sm ring-1 ring-black/5">
+          <header className="border-b border-[#f4f7fe] px-6 pb-4 pt-6">
+            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+              System Configuration
+            </h2>
+          </header>
+          <div className="space-y-6 px-6 pb-6 pt-8">
+            <div className="space-y-2">
+              <label className={labelClass}>Inventory Identity</label>
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                maxLength={120}
+                className={fieldClass}
+              />
+            </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input
-              label="Low-stock threshold"
-              type="number"
-              min={0}
-              step={1}
-              value={String(form.low_stock_threshold)}
-              onChange={(event) =>
-                setForm({ ...form, low_stock_threshold: Number(event.target.value) })
-              }
-              hint="Default minimum for products that do not set their own."
-            />
-            <Select
-              label="Currency"
-              value={form.currency}
-              onChange={(event) => setForm({ ...form, currency: event.target.value })}
-              options={CURRENCIES.map((code) => ({ value: code, label: code }))}
-            />
-            <Select
-              label="Rows per page"
-              value={String(form.rows_per_page)}
-              onChange={(event) =>
-                setForm({ ...form, rows_per_page: Number(event.target.value) })
-              }
-              options={PAGE_SIZES.map((size) => ({ value: size, label: `${size} rows` }))}
-              hint="Preferred table page size."
-            />
-            <Select
-              label="Date format"
-              value={form.date_format}
-              onChange={(event) => setForm({ ...form, date_format: event.target.value })}
-              options={[
-                { value: "YYYY-MM-DD", label: "YYYY-MM-DD" },
-                { value: "DD/MM/YYYY", label: "DD/MM/YYYY" },
-                { value: "MM/DD/YYYY", label: "MM/DD/YYYY" },
-              ]}
-            />
+            <div className="space-y-2">
+              <label className={labelClass}>Primary Currency</label>
+              <select
+                value={currency}
+                onChange={(event) => setCurrency(event.target.value)}
+                className={fieldClass}
+              >
+                {CURRENCIES.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className={labelClass}>Date Presentation</label>
+              <select
+                value={dateFormat}
+                onChange={(event) => setDateFormat(event.target.value)}
+                className={fieldClass}
+              >
+                {DATE_FORMATS.map((format) => (
+                  <option key={format} value={format}>
+                    {format}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className={labelClass}>Low Stock Threshold (Units)</label>
+              <input
+                type="number"
+                min={0}
+                value={threshold}
+                onChange={(event) => setThreshold(event.target.value)}
+                className={fieldClass}
+              />
+              <p className="ml-1 text-[10px] font-bold text-[#a3aed0]">
+                Global default units for product alerts
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleSaveSettings}
+                disabled={saving}
+                className="h-11 w-full rounded-xl bg-[#4318ff] font-black uppercase tracking-widest text-white shadow-[0_10px_20px_-5px_rgba(67,24,255,0.3)] transition-all hover:bg-[#3311cc] disabled:opacity-60"
+              >
+                {saving ? "Processing…" : "Commit changes"}
+              </button>
+            </div>
           </div>
+        </section>
 
-          {error && (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-              {error}
-            </p>
-          )}
+        <section className="overflow-hidden rounded-[20px] bg-white shadow-sm ring-1 ring-black/5">
+          <header className="border-b border-[#f4f7fe] px-6 pb-4 pt-6">
+            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+              Account Credentials
+            </h2>
+          </header>
+          <div className="space-y-6 px-6 pb-6 pt-8">
+            <div className="space-y-4 rounded-2xl border border-[#f4f7fe] bg-[#f4f7fe] p-6">
+              <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+                Current Identity
+              </label>
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2b3674] text-sm font-bold text-white shadow-lg">
+                  {(user?.email ?? "U").charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="mb-1 text-sm font-bold leading-none text-[#2b3674]">
+                    {settings.company_name}
+                  </p>
+                  <p className="text-[10px] font-bold text-[#a3aed0]">{user?.email ?? "—"}</p>
+                </div>
+              </div>
+              <div className="mt-4 border-t border-white/50 pt-4">
+                <span className="mr-2 text-[10px] font-black uppercase tracking-[0.2em] text-[#a3aed0]">
+                  Assigned Access:
+                </span>
+                <span className="rounded-lg bg-[#05cd99]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#05cd99]">
+                  admin
+                </span>
+              </div>
+            </div>
 
-          <div className="flex flex-wrap justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={() => setConfirmApply(true)}>
-              Apply threshold to products
-            </Button>
-            <Button type="submit" loading={saving}>
-              Save settings
-            </Button>
+            <div className="space-y-4">
+              <label className={labelClass}>Security Update</label>
+              <div className="space-y-3">
+                <input
+                  type="password"
+                  placeholder="New secure password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  className={fieldClass}
+                />
+                <input
+                  type="password"
+                  placeholder="Confirm secure password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  className={fieldClass}
+                />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleChangePassword}
+              disabled={updating}
+              className="h-11 w-full rounded-xl border border-[#f4f7fe] bg-white text-sm font-bold text-[#2b3674] shadow-sm transition hover:bg-[#f4f7fe] disabled:opacity-60"
+            >
+              {updating ? "Updating…" : "Update Security Code"}
+            </button>
           </div>
-        </form>
-      </Card>
-
-      <Card>
-        <CardHeader title="Account" subtitle="Signed-in operator" />
-        <dl className="divide-y divide-slate-100 text-sm">
-          <div className="flex justify-between gap-4 px-5 py-3">
-            <dt className="text-slate-500">Email</dt>
-            <dd className="font-medium text-slate-900">{user?.email ?? "—"}</dd>
-          </div>
-          <div className="flex justify-between gap-4 px-5 py-3">
-            <dt className="text-slate-500">User ID</dt>
-            <dd className="font-mono text-xs text-slate-600">{user?.id ?? "—"}</dd>
-          </div>
-        </dl>
-      </Card>
-
-      <ConfirmDialog
-        open={confirmApply}
-        title="Apply threshold"
-        loading={applyingThreshold}
-        confirmLabel="Apply"
-        message={`Set the minimum stock of every product that currently has 0 to ${form.low_stock_threshold}?`}
-        onCancel={() => setConfirmApply(false)}
-        onConfirm={handleApplyThreshold}
-      />
+        </section>
+      </div>
     </div>
   );
 }
