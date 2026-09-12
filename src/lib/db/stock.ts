@@ -124,3 +124,52 @@ async function syncLowStockNotification(productId: string): Promise<void> {
     // A notification must never fail the stock movement that triggered it.
   }
 }
+
+/** A product as the movement form needs it: stock on hand plus packaging. */
+export interface MovementProduct {
+  id: string;
+  name: string;
+  sku: string | null;
+  currentUnits: number;
+  unitsPerBox: number;
+}
+
+/**
+ * Products for the Stock IN / Stock OUT form. Units-per-box comes from the
+ * newest batch, since the schema stores packaging per batch.
+ */
+export async function getMovementProducts(): Promise<MovementProduct[]> {
+  const [inventoryRes, batchesRes] = await Promise.all([
+    supabase.from("inventory").select("id,name,sku,current_stock").order("name"),
+    supabase
+      .from("stock_batches")
+      .select("product_id,qty_per_box,batch_date,created_at")
+      .order("batch_date", { ascending: true })
+      .order("created_at", { ascending: true }),
+  ]);
+
+  assertOk(inventoryRes.error);
+  assertOk(batchesRes.error);
+
+  const latestPerBox = new Map<string, number>();
+  for (const batch of (batchesRes.data ?? []) as Array<{
+    product_id: string;
+    qty_per_box: number;
+  }>) {
+    const perBox = Number(batch.qty_per_box ?? 0);
+    if (perBox > 0) latestPerBox.set(batch.product_id, perBox);
+  }
+
+  return ((inventoryRes.data ?? []) as Array<{
+    id: string;
+    name: string;
+    sku: string | null;
+    current_stock: number;
+  }>).map((row) => ({
+    id: row.id,
+    name: row.name,
+    sku: row.sku,
+    currentUnits: Number(row.current_stock ?? 0),
+    unitsPerBox: latestPerBox.get(row.id) ?? 0,
+  }));
+}
