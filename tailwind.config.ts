@@ -67,9 +67,11 @@ const config: Config = {
         lg: "0.75rem",
       },
       fontFamily: {
-        sans: ['"Times New Roman"', "Times", "serif"],
-        serif: ['"Times New Roman"', "Times", "serif"],
-        mono: ['"Times New Roman"', "Times", "serif"],
+        // Baloo Da 2, loaded in src/app/layout.tsx. Times stays behind it as
+        // the fallback, which is also what the whole app used before.
+        sans: ["var(--font-baloo)", '"Times New Roman"', "Times", "serif"],
+        serif: ["var(--font-baloo)", '"Times New Roman"', "Times", "serif"],
+        mono: ["var(--font-baloo)", '"Times New Roman"', "Times", "serif"],
       },
       keyframes: {
         "fade-in": {

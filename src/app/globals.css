@@ -9,7 +9,7 @@
 html,
 body {
   height: 100%;
-  font-family: "Times New Roman", Times, serif;
+  font-family: var(--font-baloo), "Times New Roman", Times, serif;
 }
 
 body {
