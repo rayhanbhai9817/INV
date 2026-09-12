@@ -2,23 +2,22 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { useToast } from "@/components/ui/Toast";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Logo } from "@/components/layout/Logo";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { sendPasswordReset, signIn } from "@/lib/db/auth";
+import { signIn } from "@/lib/db/auth";
 import { errorMessage } from "@/lib/supabase";
 
 export default function LoginPage() {
   const router = useRouter();
-  const toast = useToast();
   const { user, loading: sessionLoading } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
 
   // Already signed in — skip the form.
   useEffect(() => {
@@ -29,88 +28,117 @@ export default function LoginPage() {
     event.preventDefault();
     setError(null);
 
-    if (!email.trim() || !password) {
-      setError("Enter both your email and password.");
-      return;
-    }
+    const nextFieldErrors: { email?: string; password?: string } = {};
+    if (!email.trim()) nextFieldErrors.email = "Email is required.";
+    if (!password) nextFieldErrors.password = "Password is required.";
+    setFieldErrors(nextFieldErrors);
+    if (Object.keys(nextFieldErrors).length > 0) return;
 
     setSubmitting(true);
     try {
       await signIn(email.trim(), password);
-      toast.success("Signed in.");
       router.replace("/dashboard");
     } catch (caught) {
       setError(errorMessage(caught));
-    } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleReset() {
-    if (!email.trim()) {
-      setError("Enter your email address first, then choose “Forgot password”.");
-      return;
-    }
-    try {
-      await sendPasswordReset(email.trim());
-      toast.success("Password reset email sent.");
-    } catch (caught) {
-      toast.error(errorMessage(caught));
-    }
-  }
-
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-12">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center text-center">
-          <Logo height={52} className="mb-5" />
-          <h1 className="text-xl font-semibold text-slate-900">Inventory Management</h1>
-          <p className="mt-1 text-sm text-slate-500">Sign in to manage stock and reports.</p>
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
+      <div className="w-full max-w-[420px]">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-8 shadow-xl shadow-slate-200/60 sm:p-10">
+          {/* ----------------------------- Brand ---------------------------- */}
+          <div className="mb-8">
+            <Logo height={38} />
+            <p className="mt-4 text-sm font-bold tracking-tight text-slate-900">Fast Sold LLC</p>
+          </div>
+
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-[2rem]">
+            Welcome Back
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">Sign in to your inventory dashboard</p>
+
+          {/* ----------------------------- Form ----------------------------- */}
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5" noValidate>
+            <div>
+              <label
+                htmlFor="email"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@fastsold.com"
+                aria-invalid={Boolean(fieldErrors.email)}
+                className={`w-full rounded-xl border bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 ${
+                  fieldErrors.email
+                    ? "border-red-300 focus:border-red-400 focus:ring-red-100"
+                    : "border-slate-200 focus:border-brand-500 focus:ring-brand-100"
+                }`}
+              />
+              {fieldErrors.email && (
+                <p className="mt-1.5 text-xs font-medium text-red-600">{fieldErrors.email}</p>
+              )}
+            </div>
+
+            <div>
+              <label
+                htmlFor="password"
+                className="mb-1.5 block text-sm font-semibold text-slate-700"
+              >
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="••••••••"
+                  aria-invalid={Boolean(fieldErrors.password)}
+                  className={`w-full rounded-xl border bg-white px-4 py-3 pr-12 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 ${
+                    fieldErrors.password
+                      ? "border-red-300 focus:border-red-400 focus:ring-red-100"
+                      : "border-slate-200 focus:border-brand-500 focus:ring-brand-100"
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((previous) => !previous)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-slate-400 transition hover:bg-slate-50 hover:text-slate-600"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              {fieldErrors.password && (
+                <p className="mt-1.5 text-xs font-medium text-red-600">{fieldErrors.password}</p>
+              )}
+            </div>
+
+            {error && (
+              <p className="text-sm font-medium text-red-600" role="alert">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-brand-500/25 transition hover:bg-brand-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {submitting && <Loader2 size={16} className="animate-spin" />}
+              {submitting ? "Signing in…" : "Sign In"}
+            </button>
+          </form>
         </div>
-
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-        >
-          <Input
-            label="Email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@fastsold.com"
-            required
-          />
-          <Input
-            label="Password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="••••••••"
-            required
-          />
-
-          {error && (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-              {error}
-            </p>
-          )}
-
-          <Button type="submit" className="w-full" loading={submitting}>
-            Sign in
-          </Button>
-
-          <button
-            type="button"
-            onClick={handleReset}
-            className="w-full text-center text-xs text-slate-500 underline-offset-2 hover:text-brand-600 hover:underline"
-          >
-            Forgot password?
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-xs text-slate-400">Internal system</p>
       </div>
     </main>
   );

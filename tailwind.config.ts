@@ -8,17 +8,24 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        /** Accent — warm orange. Used for primary actions and active states. */
         brand: {
-          50: "#eef6ff",
-          100: "#d9ebff",
-          200: "#bcdcff",
-          300: "#8ec6ff",
-          400: "#59a6ff",
-          500: "#3282f6",
-          600: "#1f63db",
-          700: "#1a4fb0",
-          800: "#1b448c",
-          900: "#1b3b71",
+          50: "#fff7ed",
+          100: "#ffedd5",
+          200: "#fed7aa",
+          300: "#fdba74",
+          400: "#fb923c",
+          500: "#f97316",
+          600: "#ea580c",
+          700: "#c2410c",
+          800: "#9a3412",
+          900: "#7c2d12",
+        },
+        /** Sidebar surface. */
+        shell: {
+          900: "#111827",
+          800: "#1f2937",
+          700: "#374151",
         },
       },
       keyframes: {

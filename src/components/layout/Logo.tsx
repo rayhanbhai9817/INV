@@ -1,17 +1,28 @@
 import { cn } from "@/lib/utils";
 
+/** Colour treatments for the mark, so it works on light and dark surfaces. */
+export type LogoTone = "brand" | "light" | "onAccent";
+
+const TONE_COLOR: Record<LogoTone, string> = {
+  brand: "#be1e2d",
+  light: "#ffffff",
+  onAccent: "#ffffff",
+};
+
+const WORDMARK_FONT = "'Segoe UI', 'Helvetica Neue', Arial, system-ui, sans-serif";
+
 export interface LogoProps {
   /** Rendered height of the mark in pixels. Width follows the aspect ratio. */
   height?: number;
+  tone?: LogoTone;
   className?: string;
   title?: string;
 }
 
-/**
- * Ozipco brand mark: crimson pill outline around the lowercase wordmark.
- * Drawn as an SVG so it stays sharp at every size and needs no image asset.
- */
-export function Logo({ height = 32, className, title = "Ozipco" }: LogoProps) {
+/** Ozipco wordmark: pill outline around the lowercase logotype. */
+export function Logo({ height = 32, tone = "brand", className, title = "Ozipco" }: LogoProps) {
+  const color = TONE_COLOR[tone];
+
   return (
     <svg
       viewBox="0 0 260 96"
@@ -30,7 +41,7 @@ export function Logo({ height = 32, className, title = "Ozipco" }: LogoProps) {
         rx="43"
         ry="43"
         fill="none"
-        stroke="#be1e2d"
+        stroke={color}
         strokeWidth="10"
       />
       <text
@@ -38,11 +49,11 @@ export function Logo({ height = 32, className, title = "Ozipco" }: LogoProps) {
         y="50"
         textAnchor="middle"
         dominantBaseline="central"
-        fill="#be1e2d"
+        fill={color}
         fontSize="54"
         fontWeight="700"
         letterSpacing="-1"
-        fontFamily="'Segoe UI', 'Helvetica Neue', Arial, system-ui, sans-serif"
+        fontFamily={WORDMARK_FONT}
       >
         ozipco
       </text>
@@ -50,8 +61,21 @@ export function Logo({ height = 32, className, title = "Ozipco" }: LogoProps) {
   );
 }
 
-/** Square lockup for favicons and tight spaces — the "o" inside the pill. */
-export function LogoMark({ size = 36, className }: { size?: number; className?: string }) {
+/** Square lockup for favicons, the collapsed sidebar rail and tight spaces. */
+export function LogoMark({
+  size = 36,
+  tone = "brand",
+  className,
+}: {
+  size?: number;
+  tone?: LogoTone;
+  className?: string;
+}) {
+  const color = TONE_COLOR[tone];
+  // On the orange accent tile the outline would fight the background, so the
+  // letter alone carries the mark.
+  const showOutline = tone !== "onAccent";
+
   return (
     <svg
       viewBox="0 0 96 96"
@@ -61,26 +85,28 @@ export function LogoMark({ size = 36, className }: { size?: number; className?: 
       aria-label="Ozipco"
       className={cn("shrink-0", className)}
     >
-      <rect
-        x="5"
-        y="5"
-        width="86"
-        height="86"
-        rx="30"
-        ry="30"
-        fill="none"
-        stroke="#be1e2d"
-        strokeWidth="9"
-      />
+      {showOutline && (
+        <rect
+          x="5"
+          y="5"
+          width="86"
+          height="86"
+          rx="30"
+          ry="30"
+          fill="none"
+          stroke={color}
+          strokeWidth="9"
+        />
+      )}
       <text
         x="48"
         y="52"
         textAnchor="middle"
         dominantBaseline="central"
-        fill="#be1e2d"
-        fontSize="52"
+        fill={color}
+        fontSize={showOutline ? "52" : "64"}
         fontWeight="700"
-        fontFamily="'Segoe UI', 'Helvetica Neue', Arial, system-ui, sans-serif"
+        fontFamily={WORDMARK_FONT}
       >
         o
       </text>
