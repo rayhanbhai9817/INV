@@ -590,6 +590,248 @@ img {
 }
 
 /* ---------------------------------------------------------------------
+ * Single post
+ * ------------------------------------------------------------------- */
+.pringomart-single-thumb {
+	border-radius: var( --radius );
+	overflow: hidden;
+	margin-bottom: 20px;
+}
+
+.pringomart-category-badge-static {
+	display: inline-block;
+	margin-bottom: 10px;
+}
+
+.pringomart-single-title {
+	font-size: 1.8rem;
+	margin: 0 0 14px;
+	line-height: 1.3;
+}
+
+.pringomart-author-bar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 20px;
+}
+
+.pringomart-author-bar-meta {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.pringomart-author-name a {
+	color: var( --text-primary );
+	font-weight: 600;
+}
+
+.pringomart-post-submeta {
+	font-size: 0.82rem;
+	color: var( --text-secondary );
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+.pringomart-single-content {
+	font-size: 1.05rem;
+	line-height: 1.8;
+}
+
+.pringomart-single-content img {
+	border-radius: var( --radius );
+}
+
+.pringomart-avatar-wrap {
+	position: relative;
+	display: inline-block;
+}
+
+.pringomart-rank-badge {
+	font-size: 0.75rem;
+	color: var( --text-secondary );
+	margin-left: 6px;
+}
+
+/* Reaction bar */
+.pringomart-reaction-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin: 26px 0;
+	padding: 14px;
+	background: var( --bg-card );
+	border-radius: var( --radius );
+	box-shadow: var( --card-shadow );
+}
+
+.pringomart-reactions {
+	display: flex;
+	gap: 6px;
+}
+
+.pringomart-reaction-btn {
+	background: var( --bg-secondary );
+	border: 1px solid var( --border-color );
+	border-radius: 20px;
+	padding: 6px 12px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	color: var( --text-primary );
+}
+
+.pringomart-reaction-btn.is-active {
+	border-color: var( --accent-color );
+	background: rgba( 108, 99, 255, 0.12 );
+}
+
+.pringomart-post-actions {
+	display: flex;
+	gap: 10px;
+}
+
+.pringomart-like-btn,
+.pringomart-bookmark-btn,
+.pringomart-share-btn {
+	background: var( --bg-secondary );
+	border: 1px solid var( --border-color );
+	border-radius: 20px;
+	padding: 6px 12px;
+	cursor: pointer;
+	color: var( --text-primary );
+}
+
+.pringomart-like-btn.is-active {
+	border-color: #ff4757;
+	color: #ff4757;
+}
+
+.pringomart-post-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 16px 0;
+}
+
+.pringomart-tag {
+	background: var( --bg-card );
+	border: 1px solid var( --border-color );
+	border-radius: 16px;
+	padding: 4px 12px;
+	font-size: 0.85rem;
+	color: var( --text-secondary );
+}
+
+.pringomart-author-bio-box {
+	display: flex;
+	gap: 14px;
+	background: var( --bg-card );
+	border-radius: var( --radius );
+	box-shadow: var( --card-shadow );
+	padding: 18px;
+	margin: 20px 0;
+}
+
+.pringomart-author-bio-content h3 {
+	margin: 0 0 6px;
+}
+
+.pringomart-author-bio-content p {
+	margin: 0;
+	color: var( --text-secondary );
+	font-size: 0.9rem;
+}
+
+/* ---------------------------------------------------------------------
+ * Comments
+ * ------------------------------------------------------------------- */
+.pringomart-comments-wrap {
+	margin-top: 30px;
+}
+
+.pringomart-comment-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.pringomart-comment-list .children {
+	list-style: none;
+	margin: 0 0 0 48px;
+	padding: 0;
+}
+
+.pringomart-comment {
+	margin-bottom: 18px;
+}
+
+.pringomart-comment-body {
+	display: flex;
+	gap: 12px;
+}
+
+.pringomart-comment-content {
+	flex: 1;
+	background: var( --bg-card );
+	border-radius: var( --radius );
+	box-shadow: var( --card-shadow );
+	padding: 12px 14px;
+}
+
+.pringomart-comment-meta {
+	font-size: 0.85rem;
+	color: var( --text-secondary );
+	margin-bottom: 4px;
+}
+
+.pringomart-comment-author {
+	font-weight: 600;
+	color: var( --text-primary );
+}
+
+.pringomart-comment-actions {
+	display: flex;
+	gap: 14px;
+	margin-top: 8px;
+	font-size: 0.82rem;
+}
+
+.pringomart-comment-actions button,
+.pringomart-comment-actions a {
+	background: none;
+	border: none;
+	color: var( --text-secondary );
+	cursor: pointer;
+	padding: 0;
+}
+
+.pringomart-comment-like-btn.is-active {
+	color: var( --accent-color );
+}
+
+.pringomart-comment-login-notice {
+	text-align: center;
+	padding: 24px;
+	background: var( --bg-card );
+	border-radius: var( --radius );
+}
+
+.pringomart-comment-textarea {
+	width: 100%;
+	padding: 10px;
+	border-radius: var( --radius );
+	border: 1px solid var( --border-color );
+	background: var( --bg-card );
+	color: var( --text-primary );
+}
+
+/* ---------------------------------------------------------------------
  * Buttons
  * ------------------------------------------------------------------- */
 .pringomart-btn {
