@@ -8,7 +8,80 @@
 	document.addEventListener( 'DOMContentLoaded', function () {
 		initMobileDrawer();
 		initLiveSearch();
+		initFeaturedSlider();
 	} );
+
+	function initFeaturedSlider() {
+		var slider = document.querySelector( '[data-pringomart-slider]' );
+
+		if ( ! slider ) {
+			return;
+		}
+
+		var slides = Array.prototype.slice.call( slider.querySelectorAll( '.pringomart-slide' ) );
+		var dotsWrap = slider.querySelector( '.pringomart-slider-dots' );
+		var prevBtn = slider.querySelector( '.pringomart-slider-prev' );
+		var nextBtn = slider.querySelector( '.pringomart-slider-next' );
+
+		if ( slides.length < 2 ) {
+			if ( prevBtn ) prevBtn.style.display = 'none';
+			if ( nextBtn ) nextBtn.style.display = 'none';
+			return;
+		}
+
+		var current = slides.findIndex( function ( s ) {
+			return s.classList.contains( 'is-active' );
+		} );
+		current = current === -1 ? 0 : current;
+
+		var dots = slides.map( function ( _, index ) {
+			var dot = document.createElement( 'button' );
+			dot.type = 'button';
+			dot.setAttribute( 'aria-label', 'Slide ' + ( index + 1 ) );
+			if ( index === current ) {
+				dot.classList.add( 'is-active' );
+			}
+			dot.addEventListener( 'click', function () {
+				goTo( index );
+			} );
+			dotsWrap.appendChild( dot );
+			return dot;
+		} );
+
+		var timer;
+
+		function goTo( index ) {
+			slides[ current ].classList.remove( 'is-active' );
+			dots[ current ].classList.remove( 'is-active' );
+			current = ( index + slides.length ) % slides.length;
+			slides[ current ].classList.add( 'is-active' );
+			dots[ current ].classList.add( 'is-active' );
+		}
+
+		function next() {
+			goTo( current + 1 );
+		}
+
+		function prev() {
+			goTo( current - 1 );
+		}
+
+		function startAutoplay() {
+			timer = setInterval( next, 5000 );
+		}
+
+		function stopAutoplay() {
+			clearInterval( timer );
+		}
+
+		if ( nextBtn ) nextBtn.addEventListener( 'click', function () { stopAutoplay(); next(); startAutoplay(); } );
+		if ( prevBtn ) prevBtn.addEventListener( 'click', function () { stopAutoplay(); prev(); startAutoplay(); } );
+
+		slider.addEventListener( 'mouseenter', stopAutoplay );
+		slider.addEventListener( 'mouseleave', startAutoplay );
+
+		startAutoplay();
+	}
 
 	function initMobileDrawer() {
 		var toggle = document.querySelector( '.pringomart-hamburger' );
