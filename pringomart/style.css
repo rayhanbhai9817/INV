@@ -1,0 +1,21 @@
+/*
+Theme Name: Pringomart
+Theme URI: https://www.pringomart.com/
+Author: Hasnat Rayhan
+Author URI: https://www.pringomart.com/
+Description: A TrickBD-inspired tech community theme for Pringomart. Features built-in reactions, points & ranks, view counter, online users, community Q&A, notifications and dark/light mode — all without third-party plugins.
+Version: 1.0.0
+Requires at least: 6.0
+Requires PHP: 7.4
+License: GNU General Public License v2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: pringomart
+Tags: community, tech, blog, dark-mode, responsive
+*/
+
+/*
+This stylesheet only carries the WordPress-required theme header.
+All actual styling lives in /assets/css/main.css and /assets/css/dark-mode.css,
+loaded via inc/enqueue.php so caching, versioning and conditional loading
+(e.g. only loading dark-mode.css when the module is enabled) work properly.
+*/
